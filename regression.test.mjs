@@ -22,10 +22,13 @@ assert.match(css, /td\[data-zju-ratio-label\]::after/, "modal ratio badge is ren
 assert.match(content, /\.ant-modal \.ant-table-wrapper/, "class coloring is scoped to the Ant modal table");
 assert.match(content, /otherCourseConflict \? "red" : sameCourseConflict \? "yellow" : "green"/, "red and yellow require real schedule conflicts");
 assert.match(bridge, /name\.startsWith\("未"\)\) return false;[\s\S]*return Boolean\(item\.kcbjId\)/, "unselected status overrides a stale class id");
+assert.match(bridge, /const REFRESH_INTERVAL_MS = 60 \* 1000/, "automatic refresh interval is one minute");
+assert.match(bridge, /lastRefreshAt && Date\.now\(\) < cooldownUntil/, "manual refreshes share a cooldown window");
+assert.match(content, /冷却中/, "refresh button shows a cooldown state");
 assert.match(content, /"textContent" in value/, "DOM elements are read through textContent");
 assert.match(content, /!element\?\.closest\?\.\("#zju-helper-panel"\)/, "panel rendering does not trigger an observer loop");
 assert.doesNotMatch(css, /box-shadow: inset 4px/, "ratio text has no left-side color bar");
 assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background");
-assert.equal(manifest.version, "0.4.2");
+assert.equal(manifest.version, "0.4.3");
 
 console.log("regression checks passed");

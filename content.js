@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = "zjuCourseHelperCacheV1";
   const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0 };
-  let decorateTimer = 0;
+  let decorateTimer = 0, refreshButtonTimer = 0;
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -35,11 +35,30 @@
     });
   }
 
-  function setStatus(message, kind = "") {
+  function setStatus(message, kind = "", cooldownUntil = 0) {
     makePanel();
     const el = document.getElementById("zju-helper-status");
+    const button = document.getElementById("zju-helper-refresh");
     el.textContent = message;
     el.dataset.kind = kind;
+    clearTimeout(refreshButtonTimer);
+    if (!button) return;
+    if (kind === "loading") {
+      button.disabled = true;
+      button.textContent = "正在刷新…";
+      return;
+    }
+    if (cooldownUntil > Date.now()) {
+      button.disabled = true;
+      button.textContent = `冷却中（${Math.ceil((cooldownUntil - Date.now()) / 1000)} 秒）`;
+      refreshButtonTimer = setTimeout(() => {
+        button.disabled = false;
+        button.textContent = "刷新实时人数";
+      }, cooldownUntil - Date.now() + 50);
+      return;
+    }
+    button.disabled = false;
+    button.textContent = "刷新实时人数";
   }
 
   function parseSchedules(raw) {
@@ -239,7 +258,7 @@
       chrome.storage.local.set({ [STORAGE_KEY]: state });
       scheduleDecorate();
     } else if (data.type === "status") {
-      setStatus(data.message || "", data.state || "");
+      setStatus(data.message || "", data.state || "", Number(data.cooldownUntil) || 0);
     }
   });
 

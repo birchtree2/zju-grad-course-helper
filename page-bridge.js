@@ -6,8 +6,9 @@
   const nativeOpen = XHR.prototype.open;
   const nativeSend = XHR.prototype.send;
   const nativeHeader = XHR.prototype.setRequestHeader;
+  const REFRESH_INTERVAL_MS = 60 * 1000;
   const headers = new Map();
-  let apiPrefix = "", selected = [], courses = [], classes = [], refreshing = false;
+  let apiPrefix = "", selected = [], courses = [], classes = [], refreshing = false, lastRefreshAt = 0;
 
   const emit = detail => window.dispatchEvent(new CustomEvent(OUT, { detail }));
   const pathOf = url => { try { return new URL(url, location.href).pathname; } catch (_) { return String(url || ""); } };
@@ -106,7 +107,13 @@
     if (refreshing) return;
     if (!courses.length) return emit({ type: "status", state: "waiting", message: "请刷新一次选课页面以读取课程" });
     if (!headers.size) return emit({ type: "status", state: "waiting", message: "等待站点登录请求完成" });
+    const cooldownUntil = lastRefreshAt + REFRESH_INTERVAL_MS;
+    if (lastRefreshAt && Date.now() < cooldownUntil) {
+      const seconds = Math.ceil((cooldownUntil - Date.now()) / 1000);
+      return emit({ type: "status", state: "cooldown", message: `请等待 ${seconds} 秒后再刷新`, cooldownUntil });
+    }
     refreshing = true;
+    lastRefreshAt = Date.now();
     emit({ type: "status", state: "loading", message: `正在刷新 ${courses.length} 门课程` });
     const result = []; let failed = 0;
     for (const course of courses) {
@@ -115,7 +122,7 @@
     }
     classes = result; refreshing = false;
     emit({ type: "capacities", classes, selected, updatedAt: Date.now(), failed });
-    emit({ type: "status", state: failed ? "warning" : "ready", message: failed ? `已刷新，${failed} 门课程暂未返回` : `已更新 ${classes.length} 个教学班` });
+    emit({ type: "status", state: failed ? "warning" : "ready", message: failed ? `已刷新，${failed} 门课程暂未返回` : `已更新 ${classes.length} 个教学班`, cooldownUntil: lastRefreshAt + REFRESH_INTERVAL_MS });
   }
 
   window.addEventListener(REFRESH, () => {
@@ -124,5 +131,5 @@
     refreshAll();
   });
   setTimeout(() => emit({ type: "status", state: "waiting", message: "等待选课数据加载" }), 800);
-  setTimeout(refreshAll, 2500);
+  setTimeout(refreshAll, REFRESH_INTERVAL_MS);
 })();
