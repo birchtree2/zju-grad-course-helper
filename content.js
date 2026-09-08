@@ -209,10 +209,9 @@
       if (lastOpened.url === url && now - lastOpened.at < 800) return;
       lastOpened = { url, at: now };
       event.preventDefault();
-      event.stopImmediatePropagation();
+      event.stopPropagation();
       window.open(url, "_blank", "noopener,noreferrer");
     };
-    document.addEventListener("pointerdown", openTeacher, true);
     document.addEventListener("click", openTeacher, true);
   }
 

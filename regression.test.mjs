@@ -38,7 +38,8 @@ assert.match(content, /data-zju-teacher-info/, "teacher ratings are marked next 
 assert.doesNotMatch(content, /查老师评分：/, "teacher annotations do not display the redundant 查老师 label");
 assert.match(content, /searchParams\.set\("teacherId", item\.id\)/, "teacher ratings link to a teacher-specific detail URL");
 assert.match(content, /window\.open\(url, "_blank"/, "teacher detail links open in a new tab");
-assert.match(content, /document\.addEventListener\("pointerdown", openTeacher, true\)/, "score navigation intercepts the pointer before page links");
+assert.doesNotMatch(content, /document\.addEventListener\("pointerdown", openTeacher, true\)/, "score navigation does not interrupt Vue pointer handlers");
+assert.match(content, /event\.stopPropagation\(\)/, "score navigation stops only the originating click from reaching the page link");
 assert.match(content, /if \(!clickedScore\(element, event\)\) return;/, "existing teacher name links are not hijacked");
 assert.match(content, /scheduleTeacherDecorate\(\);[\s\S]*setTimeout\(loadTeacherRatings, 0\)/, "course rendering precedes teacher loading");
 assert.match(teacherDetail, /input\.dispatchEvent\(new Event\("input", \{ bubbles: true \}\)\)/, "teacher detail page searches for the requested teacher");
