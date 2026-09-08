@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "浙大研究生选课助手",
+  "version": "0.2.0",
+  "description": "显示已选课程实时人数，并标记教学班时间冲突。",
+  "permissions": ["storage"],
+  "host_permissions": ["https://yjsy.zju.edu.cn/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://yjsy.zju.edu.cn/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://yjsy.zju.edu.cn/*"],
+      "css": ["styles.css"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+#zju-helper-panel {
+  position: fixed;
+  z-index: 2147483647;
+  right: 18px;
+  bottom: 18px;
+  width: 310px;
+  padding: 14px;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #d8e2ee;
+  border-radius: 12px;
+  box-shadow: 0 10px 32px rgba(31, 41, 55, 0.18);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  backdrop-filter: blur(8px);
+}
+
+.zju-helper-title { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+#zju-helper-status { color: #64748b; margin-bottom: 9px; }
+#zju-helper-status[data-kind="loading"] { color: #1677ff; }
+#zju-helper-status[data-kind="warning"] { color: #d97706; }
+#zju-helper-diagnostics { color: #94a3b8; margin: -5px 0 8px; font-size: 12px; }
+#zju-helper-refresh {
+  width: 100%; padding: 6px 8px; border: 0; border-radius: 7px;
+  color: white; background: #1677ff; cursor: pointer;
+}
+#zju-helper-refresh:hover { background: #4096ff; }
+.zju-helper-selected { margin-top: 10px; }
+.zju-helper-selected summary { color: #0958d9; cursor: pointer; }
+.zju-helper-suggestion-title { margin-top: 10px; font-weight: 700; }
+.zju-helper-hint { margin: 2px 0 6px; color: #94a3b8; font-size: 11px; }
+.zju-helper-line { padding: 4px 0; border-top: 1px solid #eef2f7; font-size: 12px; }
+.zju-helper-empty { color: #94a3b8; font-size: 12px; padding: 4px 0; }
+#zju-helper-selected-list, #zju-helper-suggestions { max-height: 170px; overflow: auto; }
+.zju-helper-legend { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 10px; font-size: 12px; }
+.zju-helper-legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; }
+.zju-helper-legend .red::before { background: #fecaca; }
+.zju-helper-legend .green::before { background: #bbf7d0; }
+.zju-helper-legend .yellow::before { background: #fde68a; }
+.zju-helper-legend .blue::before { background: #bfdbfe; }
+
+tr[data-zju-state="red"] > td { background: #fff1f0 !important; }
+tr[data-zju-state="green"] > td { background: #f0fdf4 !important; }
+tr[data-zju-state="yellow"] > td { background: #fffbeb !important; }
+tr[data-zju-state="blue"] > td { background: #eff6ff !important; }
+tr[data-zju-state="red"]:hover > td { background: #fee2e2 !important; }
+tr[data-zju-state="green"]:hover > td { background: #dcfce7 !important; }
+tr[data-zju-state="yellow"]:hover > td { background: #fef3c7 !important; }
+tr[data-zju-state="blue"]:hover > td { background: #dbeafe !important; }
