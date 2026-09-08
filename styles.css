@@ -30,6 +30,14 @@
 .zju-helper-legend .green::before { background: #bbf7d0; }
 .zju-helper-legend .yellow::before { background: #fde68a; }
 .zju-helper-legend .blue::before { background: #bfdbfe; }
+.zju-helper-ratio-legend { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; font-size: 11px; }
+.zju-helper-ratio-legend span { font-weight: 600; }
+.zju-helper-ratio-legend .low { color: #0958d9; }
+.zju-helper-ratio-legend .easy { color: #237804; }
+.zju-helper-ratio-legend .crowded { color: #ad6800; }
+.zju-helper-ratio-legend .hard { color: #d46b08; }
+.zju-helper-ratio-legend .very-hard { color: #cf1322; }
+.zju-helper-ratio-legend .extreme { color: #820014; }
 
 tr[data-zju-state="red"] > td { background: #fff1f0 !important; }
 tr[data-zju-state="green"] > td { background: #f0fdf4 !important; }
@@ -42,8 +50,24 @@ tr[data-zju-state="blue"]:hover > td { background: #dbeafe !important; }
 
 td[data-zju-row-info]::after {
   content: attr(data-zju-row-info);
-  display: block; min-width: 245px; margin-top: 6px; padding: 4px 7px;
-  border-radius: 6px; font-size: 12px; line-height: 1.45; white-space: normal;
+  display: block; min-width: 245px; margin-top: 6px;
+  font-size: 12px; line-height: 1.45; white-space: pre-line;
 }
-td[data-zju-row-kind="selected"]::after { color: #0958d9; background: #e6f4ff; }
-td[data-zju-row-kind="recommended"]::after { color: #237804; background: #f6ffed; border: 1px solid #b7eb8f; }
+
+td[data-zju-ratio-tier="low"] { --zju-ratio-color: #0958d9; }
+td[data-zju-ratio-tier="easy"] { --zju-ratio-color: #237804; }
+td[data-zju-ratio-tier="crowded"] { --zju-ratio-color: #ad6800; }
+td[data-zju-ratio-tier="hard"] { --zju-ratio-color: #d46b08; }
+td[data-zju-ratio-tier="very-hard"] { --zju-ratio-color: #cf1322; }
+td[data-zju-ratio-tier="extreme"] { --zju-ratio-color: #820014; }
+
+td[data-zju-row-info][data-zju-ratio-tier]::after {
+  color: var(--zju-ratio-color);
+}
+
+td[data-zju-ratio-label]::after {
+  content: attr(data-zju-ratio-label);
+  display: block; margin-top: 5px;
+  color: var(--zju-ratio-color);
+  font-size: 12px; font-weight: 700; line-height: 1.35; white-space: nowrap;
+}

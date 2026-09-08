@@ -23,7 +23,11 @@
       <button id="zju-helper-refresh" type="button">刷新实时人数</button>
       <div class="zju-helper-legend">
         <span class="red">冲突</span><span class="green">不冲突</span>
-        <span class="yellow">同课其他班</span><span class="blue">已选班级</span>
+        <span class="yellow">同课冲突</span><span class="blue">已选班级</span>
+      </div>
+      <div class="zju-helper-ratio-legend">
+        <span class="low">&lt;0.3 低报课</span><span class="easy">0.3–1</span><span class="crowded">1–1.5</span>
+        <span class="hard">1.5–5</span><span class="very-hard">5–10</span><span class="extreme">≥10</span>
       </div>`;
     document.documentElement.appendChild(panel);
     panel.querySelector("#zju-helper-refresh").addEventListener("click", () => {
@@ -75,12 +79,14 @@
   }
 
   function clearOldMainDecorations() {
-    document.querySelectorAll("td[data-zju-count], td[data-zju-options], td[data-zju-row-info]").forEach(cell => {
+    document.querySelectorAll("td[data-zju-count], td[data-zju-options], td[data-zju-row-info], td[data-zju-ratio-label]").forEach(cell => {
       cell.removeAttribute("data-zju-count");
       cell.removeAttribute("data-zju-count-title");
       cell.removeAttribute("data-zju-options");
       cell.removeAttribute("data-zju-row-info");
       cell.removeAttribute("data-zju-row-kind");
+      cell.removeAttribute("data-zju-ratio-label");
+      cell.removeAttribute("data-zju-ratio-tier");
     });
     document.querySelectorAll('tr[data-zju-main="true"]').forEach(row => {
       row.removeAttribute("data-zju-main");
@@ -99,8 +105,23 @@
     return { value, label: `${rounded} 进 1`, remaining };
   }
 
-  function rowLabel(prefix, item) {
-    return `${prefix} ${item.classCode || "教学班未知"}｜已选/待筛选/容量 ${enrollmentLabel(item)}｜筛选比 ${ratio(item).label}`;
+  function ratioTier(item) {
+    const value = ratio(item).value;
+    if (value < 0.3) return "low";
+    if (value < 1) return "easy";
+    if (value < 1.5) return "crowded";
+    if (value < 5) return "hard";
+    if (value < 10) return "very-hard";
+    return "extreme";
+  }
+
+  function selectedRowLabel(item, showClassCode) {
+    const classPart = showClassCode ? `${item.classCode || "教学班未知"}｜` : "";
+    return `${classPart}已选/待筛选/容量 ${enrollmentLabel(item)}｜${ratio(item).label}`;
+  }
+
+  function recommendationRowLabel(item) {
+    return `推荐班 ${item.classCode || "教学班未知"}｜已选/待筛选/容量 ${enrollmentLabel(item)}｜${ratio(item).label}`;
   }
 
   function decorateCourseRows() {
@@ -122,8 +143,9 @@
       const items = groups.get(text(codeCell));
       const chosen = items.filter(item => selectedIds.has(String(item.classCode)) || selectedIds.has(String(item.kcbjId)));
       if (chosen.length) {
-        codeCell.dataset.zjuRowInfo = chosen.map(item => rowLabel("当前班", item)).join("；");
+        codeCell.dataset.zjuRowInfo = chosen.map(item => selectedRowLabel(item, chosen.length > 1)).join("\n");
         codeCell.dataset.zjuRowKind = "selected";
+        codeCell.dataset.zjuRatioTier = ratioTier(chosen.reduce((worst, item) => ratio(item).value > ratio(worst).value ? item : worst));
         selectedRows += 1;
         continue;
       }
@@ -135,8 +157,9 @@
       );
       compatible.sort((a, b) => ratio(a).value - ratio(b).value || ratio(b).remaining - ratio(a).remaining);
       if (compatible.length) {
-        codeCell.dataset.zjuRowInfo = `${rowLabel("推荐班", compatible[0])}｜无时间冲突`;
+        codeCell.dataset.zjuRowInfo = `${recommendationRowLabel(compatible[0])}｜无时间冲突`;
         codeCell.dataset.zjuRowKind = "recommended";
+        codeCell.dataset.zjuRatioTier = ratioTier(compatible[0]);
         recommendedRows += 1;
       }
     }
@@ -152,19 +175,30 @@
 
   function decorateClassTables() {
     const selectedIds = new Set(state.selected.flatMap(item => [item.classCode, item.kcbjId]).filter(Boolean).map(String));
+    const classesById = new Map();
+    for (const item of state.classes) {
+      if (item.classCode) classesById.set(String(item.classCode), item);
+      if (item.kcbjId) classesById.set(String(item.kcbjId), item);
+    }
     let decorated = 0;
     for (const wrapper of locateCapacityTables()) {
       const headers = [...wrapper.querySelectorAll(".ant-table-thead th")].map(th => text(th));
       const nameIndex = headers.findIndex(value => value.includes("课程名称"));
       const classIndex = headers.findIndex(value => value.includes("班级编号"));
+      const countIndex = headers.findIndex(value => value.includes("已选") && value.includes("候选") && value.includes("容量"));
       const timeIndex = headers.findIndex(value => value.includes("上课时间地点"));
-      if (nameIndex < 0 || classIndex < 0 || timeIndex < 0) continue;
+      if (nameIndex < 0 || classIndex < 0 || countIndex < 0 || timeIndex < 0) continue;
       for (const row of wrapper.querySelectorAll(".ant-table-tbody > tr")) {
         const cells = [...row.querySelectorAll(":scope > td")];
         if (!cells.length) continue;
         const courseName = text(cells[nameIndex]);
         const classId = text(cells[classIndex]);
         const schedule = text(cells[timeIndex]);
+        const info = classesById.get(classId);
+        if (info && cells[countIndex]) {
+          cells[countIndex].dataset.zjuRatioLabel = ratio(info).label;
+          cells[countIndex].dataset.zjuRatioTier = ratioTier(info);
+        }
         const isSelected = selectedIds.has(classId);
         const otherCourseConflict = state.selected.some(item =>
           !selectedIds.has(classId) && text(item.courseName) !== courseName && conflicts(schedule, item.schedule)
