@@ -5,6 +5,7 @@
   <tbody>
     <tr id="main-selected"><td>习近平著作选读</td><td>3310003</td><td id="selected-cell">班级编号3310003023 冬(每周)//星期四//6-9节</td><td>待处理</td></tr>
     <tr id="main-other"><td>别的课程</td><td>9990001</td><td>-</td><td>未选</td></tr>
+    <tr id="main-recommended"><td>另一门课</td><td>9990002</td><td>-</td><td>未选</td></tr>
   </tbody>
 </table>
 <div class="ant-modal">
@@ -13,7 +14,8 @@
       <thead class="ant-table-thead"><tr><th>课程名称</th><th>班级编号</th><th>已选/候选/容量</th><th>上课时间地点</th></tr></thead>
       <tbody class="ant-table-tbody">
         <tr id="blue"><td>习近平著作选读</td><td>3310003023</td><td>20/0/107</td><td>冬(每周)//星期四//6-9节</td></tr>
-        <tr id="yellow"><td>习近平著作选读</td><td>3310003024</td><td>19/0/107</td><td>冬(每周)//星期三//6-9节</td></tr>
+        <tr id="yellow"><td>习近平著作选读</td><td>3310003024</td><td>19/0/107</td><td>冬(每周)//星期四//6-9节</td></tr>
+        <tr id="same-course-green"><td>习近平著作选读</td><td>3310003025</td><td>18/0/107</td><td>冬(每周)//星期三//6-9节</td></tr>
         <tr id="red"><td>别的课程</td><td>9990001001</td><td>1/0/30</td><td>冬(每周)//星期四//7-8节</td></tr>
         <tr id="green"><td>另一门课</td><td>9990002001</td><td>1/0/30</td><td>冬(每周)//星期五//7-8节</td></tr>
       </tbody>
@@ -29,10 +31,10 @@
     type: "capacities",
     selected: [{ kckId: "course-1", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", schedule: "冬(每周)//星期四//6-9节" }],
     classes: [
-      { kckId: "course-1", courseCode: "3310003", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", selected: 20, waiting: 0, capacity: 107, schedule: "冬(每周)//星期四//6-9节" },
+      { kckId: "course-1", courseCode: "3310003", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", selected: 20, waiting: 5, capacity: 30, schedule: "冬(每周)//星期四//6-9节" },
       { kckId: "course-1", courseCode: "3310003", kcbjId: "class-2", classCode: "3310003024", courseName: "习近平著作选读", selected: 19, waiting: 0, capacity: 107, schedule: "冬(每周)//星期三//6-9节" },
       { kckId: "course-2", courseCode: "9990001", kcbjId: "class-3", classCode: "9990001001", courseName: "别的课程", selected: 1, waiting: 0, capacity: 30, schedule: "冬(每周)//星期四//7-8节" },
-      { kckId: "course-3", courseCode: "9990002", kcbjId: "class-4", classCode: "9990002001", courseName: "另一门课", selected: 1, waiting: 0, capacity: 30, schedule: "冬(每周)//星期五//7-8节" }
+      { kckId: "course-3", courseCode: "9990002", kcbjId: "class-4", classCode: "9990002001", courseName: "另一门课", selected: 24, waiting: 6, capacity: 30, schedule: "冬(每周)//星期五//7-8节" }
     ],
     updatedAt: Date.now()
   }})), 50);

@@ -21,10 +21,6 @@
       <div id="zju-helper-status">正在读取课程…</div>
       <div id="zju-helper-diagnostics"></div>
       <button id="zju-helper-refresh" type="button">刷新实时人数</button>
-      <details class="zju-helper-selected"><summary>已选班级人数</summary><div id="zju-helper-selected-list"></div></details>
-      <div class="zju-helper-suggestion-title">推荐教学班</div>
-      <div class="zju-helper-hint">时间不冲突，且同课程中录取机会更高</div>
-      <div id="zju-helper-suggestions">正在计算…</div>
       <div class="zju-helper-legend">
         <span class="red">冲突</span><span class="green">不冲突</span>
         <span class="yellow">同课其他班</span><span class="blue">已选班级</span>
@@ -79,10 +75,12 @@
   }
 
   function clearOldMainDecorations() {
-    document.querySelectorAll("td[data-zju-count], td[data-zju-options]").forEach(cell => {
+    document.querySelectorAll("td[data-zju-count], td[data-zju-options], td[data-zju-row-info]").forEach(cell => {
       cell.removeAttribute("data-zju-count");
       cell.removeAttribute("data-zju-count-title");
       cell.removeAttribute("data-zju-options");
+      cell.removeAttribute("data-zju-row-info");
+      cell.removeAttribute("data-zju-row-kind");
     });
     document.querySelectorAll('tr[data-zju-main="true"]').forEach(row => {
       row.removeAttribute("data-zju-main");
@@ -90,63 +88,59 @@
     });
   }
 
-  function chance(item) {
+  function ratio(item) {
     const chosen = Number(item.selected) || 0;
     const waiting = Number(item.waiting) || 0;
     const capacity = Number(item.capacity) || 0;
-    const remaining = Math.max(capacity - chosen, 0);
-    if (remaining > 0) return { score: 2 + remaining / Math.max(capacity, 1), note: `余 ${remaining} 位` };
-    const pool = chosen + waiting;
-    const estimate = capacity > 0 && pool > 0 ? Math.min(100, Math.round(capacity / pool * 100)) : 0;
-    return { score: estimate / 100, note: waiting ? `候选 ${waiting}，估算 ${estimate}%` : "已满" };
+    const remaining = capacity - chosen;
+    if (remaining <= 0) return { value: Number.POSITIVE_INFINITY, label: waiting > 0 ? "∞ 进 1" : "无剩余名额", remaining };
+    const value = waiting / remaining;
+    const rounded = value >= 10 ? value.toFixed(1) : value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+    return { value, label: `${rounded} 进 1`, remaining };
   }
 
-  function replaceLines(container, lines, emptyText) {
-    if (!container) return;
-    container.replaceChildren();
-    if (!lines.length) {
-      const empty = document.createElement("div");
-      empty.className = "zju-helper-empty";
-      empty.textContent = emptyText;
-      container.appendChild(empty);
-      return;
-    }
-    for (const line of lines) {
-      const item = document.createElement("div");
-      item.className = "zju-helper-line";
-      item.textContent = line;
-      container.appendChild(item);
-    }
+  function rowLabel(prefix, item) {
+    return `${prefix} ${item.classCode || "教学班未知"}｜已选/待筛选/容量 ${enrollmentLabel(item)}｜筛选比 ${ratio(item).label}`;
   }
 
-  function renderPanelLists() {
-    const byClass = new Map(state.classes.flatMap(item => [[String(item.classCode || ""), item], [String(item.kcbjId || ""), item]]));
-    const selectedLines = state.selected.map(item => {
-      const info = byClass.get(String(item.classCode || "")) || byClass.get(String(item.kcbjId || ""));
-      return `${item.courseCode || item.courseName} · ${item.classCode || "教学班"} · ${info ? enrollmentLabel(info) : "暂无人数"}`;
-    });
-    replaceLines(document.getElementById("zju-helper-selected-list"), selectedLines, "暂无已选班级");
-
+  function decorateCourseRows() {
+    const selectedIds = new Set(state.selected.flatMap(item => [item.classCode, item.kcbjId]).filter(Boolean).map(String));
     const selectedCourseIds = new Set(state.selected.map(item => String(item.kckId)));
     const groups = new Map();
     for (const item of state.classes) {
-      if (selectedCourseIds.has(String(item.kckId)) || !parseSchedules(item.schedule).length) continue;
-      if (state.selected.some(chosen => conflicts(item.schedule, chosen.schedule))) continue;
-      const key = String(item.kckId);
+      const key = String(item.courseCode || "");
+      if (!key) continue;
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ ...item, chance: chance(item) });
+      groups.get(key).push(item);
     }
-    const suggestions = [];
-    for (const items of groups.values()) {
-      items.sort((a, b) => b.chance.score - a.chance.score || (Number(b.capacity) - Number(b.selected)) - (Number(a.capacity) - Number(a.selected)));
-      suggestions.push(items[0]);
+    let selectedRows = 0, recommendedRows = 0;
+    for (const row of document.querySelectorAll("tr")) {
+      if (row.closest(".ant-modal")) continue;
+      const cells = [...row.querySelectorAll(":scope > td")];
+      const codeCell = cells.find(cell => groups.has(text(cell)));
+      if (!codeCell) continue;
+      const items = groups.get(text(codeCell));
+      const chosen = items.filter(item => selectedIds.has(String(item.classCode)) || selectedIds.has(String(item.kcbjId)));
+      if (chosen.length) {
+        codeCell.dataset.zjuRowInfo = chosen.map(item => rowLabel("当前班", item)).join("；");
+        codeCell.dataset.zjuRowKind = "selected";
+        selectedRows += 1;
+        continue;
+      }
+      if (selectedCourseIds.has(String(items[0]?.kckId))) continue;
+      const compatible = items.filter(item =>
+        parseSchedules(item.schedule).length &&
+        !state.selected.some(selected => conflicts(item.schedule, selected.schedule)) &&
+        ratio(item).remaining > 0
+      );
+      compatible.sort((a, b) => ratio(a).value - ratio(b).value || ratio(b).remaining - ratio(a).remaining);
+      if (compatible.length) {
+        codeCell.dataset.zjuRowInfo = `${rowLabel("推荐班", compatible[0])}｜无时间冲突`;
+        codeCell.dataset.zjuRowKind = "recommended";
+        recommendedRows += 1;
+      }
     }
-    suggestions.sort((a, b) => b.chance.score - a.chance.score);
-    const suggestionLines = suggestions.slice(0, 8).map(item =>
-      `${item.courseCode || "课程号未知"} → ${item.classCode || "教学班未知"} · ${enrollmentLabel(item)} · ${item.chance.note}`
-    );
-    replaceLines(document.getElementById("zju-helper-suggestions"), suggestionLines, "暂无符合条件的课程");
-    return { selected: selectedLines.length, suggestions: suggestionLines.length };
+    return { selectedRows, recommendedRows };
   }
 
   function locateCapacityTables() {
@@ -158,7 +152,6 @@
 
   function decorateClassTables() {
     const selectedIds = new Set(state.selected.flatMap(item => [item.classCode, item.kcbjId]).filter(Boolean).map(String));
-    const selectedNames = new Set(state.selected.map(item => text(item.courseName)).filter(Boolean));
     let decorated = 0;
     for (const wrapper of locateCapacityTables()) {
       const headers = [...wrapper.querySelectorAll(".ant-table-thead th")].map(th => text(th));
@@ -173,9 +166,13 @@
         const classId = text(cells[classIndex]);
         const schedule = text(cells[timeIndex]);
         const isSelected = selectedIds.has(classId);
-        const sameCourse = selectedNames.has(courseName) && !isSelected;
-        const hasConflict = state.selected.some(item => !selectedIds.has(classId) && conflicts(schedule, item.schedule));
-        row.dataset.zjuState = isSelected ? "blue" : sameCourse ? "yellow" : hasConflict ? "red" : "green";
+        const otherCourseConflict = state.selected.some(item =>
+          !selectedIds.has(classId) && text(item.courseName) !== courseName && conflicts(schedule, item.schedule)
+        );
+        const sameCourseConflict = state.selected.some(item =>
+          !selectedIds.has(classId) && text(item.courseName) === courseName && conflicts(schedule, item.schedule)
+        );
+        row.dataset.zjuState = isSelected ? "blue" : otherCourseConflict ? "red" : sameCourseConflict ? "yellow" : "green";
         decorated += 1;
       }
     }
@@ -184,10 +181,10 @@
 
   function decorate() {
     clearOldMainDecorations();
-    const panel = renderPanelLists();
+    const rows = decorateCourseRows();
     const colors = decorateClassTables();
     const diagnostics = document.getElementById("zju-helper-diagnostics");
-    if (diagnostics) diagnostics.textContent = `已选 ${panel.selected} 班 · 推荐 ${panel.suggestions} 门 · 弹窗 ${colors} 行`;
+    if (diagnostics) diagnostics.textContent = `已选行 ${rows.selectedRows} · 推荐行 ${rows.recommendedRows} · 弹窗 ${colors} 行`;
   }
 
   function scheduleDecorate() {

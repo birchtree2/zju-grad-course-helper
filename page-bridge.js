@@ -20,10 +20,11 @@
 
   function isSelected(item) {
     if (!item?.kckId) return false;
-    if (item.kcbjId) return true;
     const code = String(item.xkzt ?? item.xkztDm ?? "");
     const name = String(item.xkztMc ?? "");
-    return code !== "11" && code !== "16" && Boolean(name) && !name.startsWith("未");
+    if (code === "11" || code === "16" || name.startsWith("未")) return false;
+    if (name) return true;
+    return Boolean(item.kcbjId);
   }
 
   function captureCourses(payload) {

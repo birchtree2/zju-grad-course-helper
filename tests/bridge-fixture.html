@@ -1,0 +1,33 @@
+<!doctype html>
+<meta charset="utf-8">
+<div id="result">等待数据</div>
+<script>
+  class FakeXHR extends EventTarget {
+    open(method, url) { this.method = method; this.url = url; }
+    setRequestHeader() {}
+    send() {
+      this.status = 200;
+      this.response = {
+        success: true,
+        result: [
+          { kckId: "canceled-course", kcbjId: "stale-class", kcmc: "已退课程", bjbh: "1001", xkztDm: "11", xkztMc: "未选" },
+          { kckId: "selected-course", kcbjId: "selected-class", kcmc: "保留课程", bjbh: "2001", xkztDm: "12", xkztMc: "待处理" }
+        ]
+      };
+      this.responseText = JSON.stringify(this.response);
+      queueMicrotask(() => this.dispatchEvent(new Event("load")));
+    }
+  }
+  window.XMLHttpRequest = FakeXHR;
+  window.addEventListener("zju-course-helper:data", event => {
+    if (event.detail?.type !== "context") return;
+    document.getElementById("result").dataset.selected = JSON.stringify(event.detail.selected);
+    document.getElementById("result").textContent = event.detail.selected.map(item => item.courseName).join(",");
+  });
+</script>
+<script src="../page-bridge.js"></script>
+<script>
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", "/py/pyXsxk/queryXsxkByXnxqXs");
+  xhr.send();
+</script>
