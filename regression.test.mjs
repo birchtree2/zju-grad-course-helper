@@ -56,6 +56,6 @@ assert.doesNotMatch(css, /box-shadow: inset 4px/, "ratio text has no left-side c
 assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background");
 assert.match(content, /zju-helper-collapse/, "side panel has a collapse control");
 assert.match(css, /data-collapsed="true"/, "collapsed side panel stays as a bottom bar");
-assert.equal(manifest.version, "0.6.2");
+assert.equal(manifest.version, "0.6.3");
 
 console.log("regression checks passed");
