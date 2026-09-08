@@ -7,7 +7,7 @@
   const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const CHALAOShi_URL = "https://chalaoshi.netlify.app/";
   const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0, homeCampuses: [] };
-  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLoadStarted = false, teacherRatings = [];
+  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLinkFrame = 0, teacherLoadStarted = false, teacherRatings = [];
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -185,8 +185,7 @@
     return decorated;
   }
 
-  function bindTeacherNavigation() {
-    const clickedScore = (element, event) => {
+  function teacherScoreRect(element) {
       const range = document.createRange();
       range.selectNodeContents(element);
       const textRects = [...range.getClientRects()];
@@ -195,30 +194,47 @@
       const fontSize = Number.parseFloat(style.fontSize) || 11;
       const scoreWidth = Math.max(28, (element.dataset.zjuTeacherInfo || "").length * fontSize * 0.62 + 12);
       const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.4;
-      return event.clientX >= rect.right - 2 && event.clientX <= rect.right + scoreWidth + 12
-        && event.clientY >= rect.top - 2 && event.clientY <= rect.bottom + lineHeight;
-    };
-    let lastOpened = { url: "", at: 0 };
-    const openTeacher = event => {
-      const element = event.target?.closest?.("[data-zju-teacher-url]");
-      if (!element || element.closest("#zju-helper-panel")) return;
-      if (!clickedScore(element, event)) return;
+    return { left: rect.right + 2, top: rect.top, width: scoreWidth + 8, height: Math.max(rect.height, lineHeight) };
+  }
+
+  function renderTeacherLinkHitboxes() {
+    let layer = document.getElementById("zju-helper-teacher-links");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "zju-helper-teacher-links";
+      document.documentElement.appendChild(layer);
+    }
+    const fragment = document.createDocumentFragment();
+    for (const element of document.querySelectorAll("[data-zju-teacher-url]")) {
+      if (!element.isConnected || element.closest("#zju-helper-panel")) continue;
       const url = element.dataset.zjuTeacherUrl;
-      if (!url) return;
-      const now = Date.now();
-      if (lastOpened.url === url && now - lastOpened.at < 800) return;
-      lastOpened = { url, at: now };
-      event.preventDefault();
-      event.stopPropagation();
-      window.open(url, "_blank", "noopener,noreferrer");
-    };
-    document.addEventListener("click", openTeacher, true);
+      const marker = teacherScoreRect(element);
+      if (!url || marker.width <= 0 || marker.height <= 0 || marker.left > innerWidth || marker.top > innerHeight || marker.left + marker.width < 0 || marker.top + marker.height < 0) continue;
+      const link = document.createElement("a");
+      link.className = "zju-helper-teacher-link";
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.setAttribute("aria-label", `查看${text(element)}的查老师评分详情`);
+      link.style.left = `${marker.left}px`;
+      link.style.top = `${marker.top}px`;
+      link.style.width = `${marker.width}px`;
+      link.style.height = `${marker.height}px`;
+      fragment.appendChild(link);
+    }
+    layer.replaceChildren(fragment);
+  }
+
+  function scheduleTeacherLinkHitboxes() {
+    cancelAnimationFrame(teacherLinkFrame);
+    teacherLinkFrame = requestAnimationFrame(renderTeacherLinkHitboxes);
   }
 
   function scheduleTeacherDecorate() {
     clearTimeout(teacherDecorateTimer);
     teacherDecorateTimer = setTimeout(() => {
       decorateTeachers();
+      scheduleTeacherLinkHitboxes();
     }, 0);
   }
 
@@ -455,7 +471,8 @@
     scheduleDecorate();
   });
 
-  bindTeacherNavigation();
+  document.addEventListener("scroll", scheduleTeacherLinkHitboxes, { capture: true, passive: true });
+  window.addEventListener("resize", scheduleTeacherLinkHitboxes, { passive: true });
 
   new MutationObserver(mutations => {
     const relevantNode = node => {
@@ -465,7 +482,7 @@
     };
     const pageChanged = mutations.some(mutation => {
       const element = mutation.target.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target.parentElement;
-      if (!element || element.closest?.("#zju-helper-panel")) return false;
+      if (!element || element.closest?.("#zju-helper-panel, #zju-helper-teacher-links")) return false;
       if (element.closest?.("table, .ant-modal, .ant-table-wrapper")) return true;
       return [...mutation.addedNodes, ...mutation.removedNodes].some(relevantNode);
     });
