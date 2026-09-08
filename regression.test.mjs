@@ -3,6 +3,7 @@ import fs from "node:fs";
 
 const content = fs.readFileSync(new URL("./content.js", import.meta.url), "utf8");
 const bridge = fs.readFileSync(new URL("./page-bridge.js", import.meta.url), "utf8");
+const background = fs.readFileSync(new URL("./background.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const manifest = JSON.parse(fs.readFileSync(new URL("./manifest.json", import.meta.url), "utf8"));
 
@@ -25,10 +26,17 @@ assert.match(bridge, /name\.startsWith\("未"\)\) return false;[\s\S]*return Boo
 assert.match(bridge, /const REFRESH_INTERVAL_MS = 60 \* 1000/, "automatic refresh interval is one minute");
 assert.match(bridge, /lastRefreshAt && Date\.now\(\) < cooldownUntil/, "manual refreshes share a cooldown window");
 assert.match(content, /冷却中/, "refresh button shows a cooldown state");
+assert.match(content, /load-teachers/, "teacher ratings are loaded through the extension worker");
+assert.match(content, /常住校区提醒（可多选）/, "campus warning settings are present in the side panel");
+assert.doesNotMatch(content, /warning\.innerHTML/, "campus warning values are not injected as HTML");
+assert.match(content, /data-zju-teacher-info/, "teacher ratings are marked next to teacher names");
+assert.match(background, /teachers\.csv/, "teacher data source is the public chalaoshi CSV");
+assert.equal(manifest.background?.service_worker, "background.js");
+assert.ok(manifest.host_permissions.includes("https://chalaoshi.netlify.app/*"));
 assert.match(content, /"textContent" in value/, "DOM elements are read through textContent");
 assert.match(content, /!element\?\.closest\?\.\("#zju-helper-panel"\)/, "panel rendering does not trigger an observer loop");
 assert.doesNotMatch(css, /box-shadow: inset 4px/, "ratio text has no left-side color bar");
 assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background");
-assert.equal(manifest.version, "0.4.3");
+assert.equal(manifest.version, "0.6.0");
 
 console.log("regression checks passed");

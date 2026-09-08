@@ -2,8 +2,12 @@
   "use strict";
 
   const STORAGE_KEY = "zjuCourseHelperCacheV1";
-  const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0 };
-  let decorateTimer = 0, refreshButtonTimer = 0;
+  const TEACHER_CACHE_KEY = "zjuCourseHelperTeachersV1";
+  const TEACHER_DATA_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+  const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山"];
+  const CHALAOShi_URL = "https://chalaoshi.netlify.app/";
+  const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0, homeCampuses: [] };
+  let decorateTimer = 0, refreshButtonTimer = 0, teacherRatings = [];
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -28,11 +32,17 @@
       <div class="zju-helper-ratio-legend">
         <span class="low">&lt;0.3 低报课</span><span class="easy">0.3–1</span><span class="crowded">1–1.5</span>
         <span class="hard">1.5–5</span><span class="very-hard">5–10</span><span class="extreme">≥10</span>
-      </div>`;
+      </div>
+      <details class="zju-helper-campus-settings">
+        <summary>常住校区提醒（可多选）</summary>
+        <div id="zju-helper-campus-options"></div>
+        <div id="zju-helper-campus-warning"></div>
+      </details>`;
     document.documentElement.appendChild(panel);
     panel.querySelector("#zju-helper-refresh").addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("zju-course-helper:refresh"));
     });
+    renderCampusOptions();
   }
 
   function setStatus(message, kind = "", cooldownUntil = 0) {
@@ -59,6 +69,108 @@
     }
     button.disabled = false;
     button.textContent = "刷新实时人数";
+  }
+
+  function campusFromSchedule(raw) {
+    const schedule = String(raw || "");
+    return CAMPUS_OPTIONS.find(name => schedule.includes(name)) || "";
+  }
+
+  function renderCampusOptions() {
+    const container = document.getElementById("zju-helper-campus-options");
+    if (!container) return;
+    const campuses = [...new Set([...CAMPUS_OPTIONS, ...state.classes.map(item => item.campus || campusFromSchedule(item.schedule)).filter(Boolean)])];
+    container.innerHTML = campuses.map(campus => `<label><input type="checkbox" value="${campus}" ${state.homeCampuses.includes(campus) ? "checked" : ""}>${campus}</label>`).join("");
+    container.querySelectorAll("input").forEach(input => input.addEventListener("change", () => {
+      state.homeCampuses = [...container.querySelectorAll("input:checked")].map(item => item.value);
+      chrome.storage.local.set({ [STORAGE_KEY]: state });
+      renderCampusWarning();
+    }));
+  }
+
+  function renderCampusWarning() {
+    const warning = document.getElementById("zju-helper-campus-warning");
+    if (!warning) return;
+    if (!state.homeCampuses.length) {
+      warning.textContent = "请选择常住校区";
+      warning.dataset.kind = "";
+      return;
+    }
+    const byId = new Map();
+    for (const item of state.classes) {
+      if (item.classCode) byId.set(String(item.classCode), item);
+      if (item.kcbjId) byId.set(String(item.kcbjId), item);
+    }
+    const mismatches = state.selected.map(item => byId.get(String(item.classCode || item.kcbjId)) || item)
+      .map(item => ({ item, campus: item.campus || campusFromSchedule(item.schedule) }))
+      .filter(({ campus }) => !campus || !state.homeCampuses.includes(campus));
+    const uniqueMismatches = [...new Map(mismatches.map(({ item, campus }) => [
+      `${item.kckId || item.courseCode || item.courseName}:${campus}`, { item, campus }
+    ])).values()];
+    if (!uniqueMismatches.length) {
+      warning.textContent = "已选课程均在常住校区";
+      warning.dataset.kind = "ok";
+      return;
+    }
+    warning.dataset.kind = "warning";
+    warning.textContent = `校区不匹配 ${uniqueMismatches.length} 门：${uniqueMismatches.map(({ item, campus }) => `${item.courseCode || item.courseName || "课程"}（${campus || "未识别"}）`).join("、")}`;
+  }
+
+  function teacherScoreClass(score) {
+    const value = Number(score);
+    if (!Number.isFinite(value)) return "unknown";
+    if (value < 2) return "low";
+    if (value >= 8.5) return "high";
+    return "normal";
+  }
+
+  function decorateTeachers() {
+    document.querySelectorAll("[data-zju-teacher-info]").forEach(element => {
+      element.removeAttribute("data-zju-teacher-info");
+      element.removeAttribute("data-zju-teacher-tier");
+      element.removeAttribute("data-zju-teacher-url");
+      element.removeAttribute("title");
+    });
+    if (!teacherRatings.length) return 0;
+    let decorated = 0;
+    const annotate = (element, teachers) => {
+      element.dataset.zjuTeacherInfo = teachers.map(item => `查老师 ${item.score || "暂无评分"}`).join(" / ");
+      element.dataset.zjuTeacherTier = teachers.reduce((tier, item) => teacherScoreClass(item.score) === "high" ? "high" : tier, teacherScoreClass(teachers[0].score));
+      element.dataset.zjuTeacherUrl = CHALAOShi_URL;
+      element.title = teachers.map(item => `查老师评分：${item.score || "暂无评分"}（${item.scoreCount || 0}人评价）`).join("；");
+      return 1;
+    };
+    for (const anchor of document.querySelectorAll("a")) {
+      if (anchor.closest("#zju-helper-panel")) continue;
+      const teacher = teacherRatings.find(item => text(anchor) === item.name);
+      if (!teacher) continue;
+      decorated += annotate(anchor, [teacher]);
+    }
+    for (const cell of document.querySelectorAll("td")) {
+      if (cell.closest("#zju-helper-panel") || cell.querySelector("[data-zju-teacher-info]")) continue;
+      const teachers = teacherRatings.filter(item => text(cell).includes(item.name));
+      if (teachers.length && text(cell).length < 100) decorated += annotate(cell, teachers);
+    }
+    return decorated;
+  }
+
+  function loadTeacherRatings() {
+    if (typeof chrome === "undefined" || !chrome.storage?.local) return;
+    chrome.storage.local.get(TEACHER_CACHE_KEY, saved => {
+      const cached = saved?.[TEACHER_CACHE_KEY];
+      if (cached?.fetchedAt && Date.now() - cached.fetchedAt < TEACHER_DATA_MAX_AGE && Array.isArray(cached.teachers)) {
+        teacherRatings = cached.teachers;
+        scheduleDecorate();
+        return;
+      }
+      if (!chrome.runtime?.sendMessage) return;
+      chrome.runtime.sendMessage({ type: "zju-course-helper:load-teachers" }, response => {
+        if (chrome.runtime.lastError || !response?.ok) return;
+        teacherRatings = response.teachers || [];
+        chrome.storage.local.set({ [TEACHER_CACHE_KEY]: { fetchedAt: Date.now(), teachers: teacherRatings } });
+        scheduleDecorate();
+      });
+    });
   }
 
   function parseSchedules(raw) {
@@ -236,8 +348,11 @@
     clearOldMainDecorations();
     const rows = decorateCourseRows();
     const colors = decorateClassTables();
+    const teachers = decorateTeachers();
+    renderCampusOptions();
+    renderCampusWarning();
     const diagnostics = document.getElementById("zju-helper-diagnostics");
-    if (diagnostics) diagnostics.textContent = `已选行 ${rows.selectedRows} · 推荐行 ${rows.recommendedRows} · 弹窗 ${colors} 行`;
+    if (diagnostics) diagnostics.textContent = `已选行 ${rows.selectedRows} · 推荐行 ${rows.recommendedRows} · 弹窗 ${colors} 行 · 教师评分 ${teachers}`;
   }
 
   function scheduleDecorate() {
@@ -267,6 +382,8 @@
     makePanel();
     scheduleDecorate();
   });
+
+  loadTeacherRatings();
 
   new MutationObserver(mutations => {
     const pageChanged = mutations.some(mutation => {

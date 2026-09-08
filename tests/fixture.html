@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="../styles.css">
 <table id="main-table">
   <tbody>
-    <tr id="main-selected"><td>习近平著作选读</td><td>3310003</td><td id="selected-cell">班级编号3310003023 冬(每周)//星期四//6-9节</td><td>待处理</td></tr>
+    <tr id="main-selected"><td>习近平著作选读</td><td>3310003</td><td id="selected-cell">班级编号3310003023 冬(每周)//星期四//6-9节</td><td><a href="#">测试老师</a></td><td>待处理</td></tr>
     <tr id="main-multi-selected"><td>多志愿课程</td><td>8880001</td><td>两个志愿</td><td>待处理</td></tr>
     <tr id="main-other"><td>别的课程</td><td>9990001</td><td>-</td><td>未选</td></tr>
     <tr id="main-recommended"><td>另一门课</td><td>9990002</td><td>-</td><td>未选</td></tr>
@@ -27,19 +27,22 @@
   </div>
 </div>
 <script>
-  window.chrome = { storage: { local: { get(_key, callback) { callback({}); }, set() {} } } };
+  window.chrome = {
+    storage: { local: { get(_key, callback) { callback({}); }, set() {} } },
+    runtime: { lastError: null, sendMessage(_message, callback) { callback({ ok: true, teachers: [{ name: "测试老师", score: "9.2", scoreCount: "12" }] }); } }
+  };
 </script>
 <script src="../content.js"></script>
 <script>
   setTimeout(() => window.dispatchEvent(new CustomEvent("zju-course-helper:data", { detail: {
     type: "capacities",
     selected: [
-      { kckId: "course-1", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", schedule: "冬(每周)//星期四//6-9节" },
+      { kckId: "course-1", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", schedule: "冬(每周)//星期四//玉泉教4-420//6-9节", campus: "玉泉" },
       { kckId: "course-multi", kcbjId: "multi-1", classCode: "8880001001", courseName: "多志愿课程", schedule: "冬(每周)//星期六//1-2节" },
       { kckId: "course-multi", kcbjId: "multi-2", classCode: "8880001002", courseName: "多志愿课程", schedule: "冬(每周)//星期六//3-4节" }
     ],
     classes: [
-      { kckId: "course-1", courseCode: "3310003", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", selected: 20, waiting: 5, capacity: 30, schedule: "冬(每周)//星期四//6-9节" },
+      { kckId: "course-1", courseCode: "3310003", kcbjId: "class-1", classCode: "3310003023", courseName: "习近平著作选读", selected: 20, waiting: 5, capacity: 30, schedule: "冬(每周)//星期四//玉泉教4-420//6-9节", campus: "玉泉" },
       { kckId: "course-1", courseCode: "3310003", kcbjId: "class-2", classCode: "3310003024", courseName: "习近平著作选读", selected: 19, waiting: 0, capacity: 107, schedule: "冬(每周)//星期三//6-9节" },
       { kckId: "course-1", courseCode: "3310003", kcbjId: "class-5", classCode: "3310003025", courseName: "习近平著作选读", selected: 20, waiting: 16, capacity: 30, schedule: "冬(每周)//星期三//6-9节" },
       { kckId: "course-2", courseCode: "9990001", kcbjId: "class-3", classCode: "9990001001", courseName: "别的课程", selected: 1, waiting: 0, capacity: 30, schedule: "冬(每周)//星期四//7-8节" },

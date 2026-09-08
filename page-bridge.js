@@ -95,11 +95,13 @@
 
   function normalize(raw, course) {
     const item = raw.pyKcbj || raw;
+    const schedule = item.sjddBz || "";
+    const campus = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山"].find(name => schedule.includes(name)) || "";
     return {
       kckId: course.kckId, courseCode: course.courseCode || item.kcbh || "",
       courseName: item.kcmc || course.courseName || "", kcbjId: item.id || raw.kcbjId,
       classCode: item.bjbh || "", selected: item.xzrs, waiting: item.hxrs, capacity: item.bjrl,
-      schedule: item.sjddBz || "", statusCode: raw.xkztDm, status: raw.xkztMc || ""
+      schedule, campus, statusCode: raw.xkztDm, status: raw.xkztMc || ""
     };
   }
 
