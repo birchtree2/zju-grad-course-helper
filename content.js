@@ -4,10 +4,10 @@
   const STORAGE_KEY = "zjuCourseHelperCacheV1";
   const TEACHER_CACHE_KEY = "zjuCourseHelperTeachersV1";
   const TEACHER_DATA_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
-  const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山"];
+  const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const CHALAOShi_URL = "https://chalaoshi.netlify.app/";
   const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0, homeCampuses: [] };
-  let decorateTimer = 0, refreshButtonTimer = 0, teacherRatings = [];
+  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLoadStarted = false, teacherRatings = [];
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -21,7 +21,7 @@
     const panel = document.createElement("aside");
     panel.id = "zju-helper-panel";
     panel.innerHTML = `
-      <div class="zju-helper-title">选课助手</div>
+      <div class="zju-helper-header"><div class="zju-helper-title">选课助手</div><button id="zju-helper-collapse" type="button" aria-expanded="true">收起</button></div>
       <div id="zju-helper-status">正在读取课程…</div>
       <div id="zju-helper-diagnostics"></div>
       <button id="zju-helper-refresh" type="button">刷新实时人数</button>
@@ -41,6 +41,13 @@
     document.documentElement.appendChild(panel);
     panel.querySelector("#zju-helper-refresh").addEventListener("click", () => {
       window.dispatchEvent(new CustomEvent("zju-course-helper:refresh"));
+    });
+    panel.querySelector("#zju-helper-collapse").addEventListener("click", () => {
+      const collapsed = panel.dataset.collapsed === "true";
+      panel.dataset.collapsed = collapsed ? "false" : "true";
+      const button = panel.querySelector("#zju-helper-collapse");
+      button.textContent = collapsed ? "收起" : "展开";
+      button.setAttribute("aria-expanded", String(collapsed));
     });
     renderCampusOptions();
   }
@@ -97,11 +104,23 @@
       return;
     }
     const byId = new Map();
+    const byCourseId = new Map();
     for (const item of state.classes) {
       if (item.classCode) byId.set(String(item.classCode), item);
       if (item.kcbjId) byId.set(String(item.kcbjId), item);
+      if (item.kckId) {
+        const key = String(item.kckId);
+        if (!byCourseId.has(key)) byCourseId.set(key, []);
+        byCourseId.get(key).push(item);
+      }
     }
-    const mismatches = state.selected.map(item => byId.get(String(item.classCode || item.kcbjId)) || item)
+    const resolveSelected = item => {
+      const direct = byId.get(String(item.classCode || "")) || byId.get(String(item.kcbjId || ""));
+      if (direct) return [direct];
+      const courseMatches = byCourseId.get(String(item.kckId || ""));
+      return courseMatches?.length ? courseMatches : [item];
+    };
+    const mismatches = state.selected.flatMap(resolveSelected)
       .map(item => ({ item, campus: item.campus || campusFromSchedule(item.schedule) }))
       .filter(({ campus }) => !campus || !state.homeCampuses.includes(campus));
     const uniqueMismatches = [...new Map(mismatches.map(({ item, campus }) => [
@@ -133,25 +152,75 @@
     });
     if (!teacherRatings.length) return 0;
     let decorated = 0;
+    const teachersByName = new Map();
+    for (const teacher of teacherRatings) {
+      if (!teacher.name) continue;
+      if (!teachersByName.has(teacher.name)) teachersByName.set(teacher.name, []);
+      teachersByName.get(teacher.name).push(teacher);
+    }
+    const detailUrl = item => {
+      const url = new URL(CHALAOShi_URL);
+      if (item.id) url.searchParams.set("teacherId", item.id);
+      if (item.name) url.searchParams.set("teacherName", item.name);
+      if (item.college) url.searchParams.set("college", item.college);
+      return url.toString();
+    };
     const annotate = (element, teachers) => {
-      element.dataset.zjuTeacherInfo = teachers.map(item => `查老师 ${item.score || "暂无评分"}`).join(" / ");
+      element.dataset.zjuTeacherInfo = teachers.map(item => item.score || "暂无评分").join(" / ");
       element.dataset.zjuTeacherTier = teachers.reduce((tier, item) => teacherScoreClass(item.score) === "high" ? "high" : tier, teacherScoreClass(teachers[0].score));
-      element.dataset.zjuTeacherUrl = CHALAOShi_URL;
-      element.title = teachers.map(item => `查老师评分：${item.score || "暂无评分"}（${item.scoreCount || 0}人评价）`).join("；");
+      element.dataset.zjuTeacherUrl = detailUrl(teachers[0]);
+      element.title = teachers.map(item => `评分：${item.score || "暂无评分"}（${item.scoreCount || 0}人评价）`).join("；");
       return 1;
     };
     for (const anchor of document.querySelectorAll("a")) {
       if (anchor.closest("#zju-helper-panel")) continue;
-      const teacher = teacherRatings.find(item => text(anchor) === item.name);
-      if (!teacher) continue;
-      decorated += annotate(anchor, [teacher]);
+      const teachers = teachersByName.get(text(anchor));
+      if (teachers?.length) decorated += annotate(anchor, teachers);
     }
     for (const cell of document.querySelectorAll("td")) {
       if (cell.closest("#zju-helper-panel") || cell.querySelector("[data-zju-teacher-info]")) continue;
-      const teachers = teacherRatings.filter(item => text(cell).includes(item.name));
+      const teachers = [...new Map(text(cell).split(/[\s/、,，;；]+/).flatMap(name => teachersByName.get(name) || []).map(item => [item.id, item])).values()];
       if (teachers.length && text(cell).length < 100) decorated += annotate(cell, teachers);
     }
     return decorated;
+  }
+
+  function bindTeacherNavigation() {
+    const clickedScore = (element, event) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const textRects = [...range.getClientRects()];
+      const rect = textRects[textRects.length - 1] || element.getBoundingClientRect();
+      const style = getComputedStyle(element, "::after");
+      const fontSize = Number.parseFloat(style.fontSize) || 11;
+      const scoreWidth = Math.max(28, (element.dataset.zjuTeacherInfo || "").length * fontSize * 0.62 + 12);
+      const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.4;
+      return event.clientX >= rect.right - 2 && event.clientX <= rect.right + scoreWidth + 12
+        && event.clientY >= rect.top - 2 && event.clientY <= rect.bottom + lineHeight;
+    };
+    let lastOpened = { url: "", at: 0 };
+    const openTeacher = event => {
+      const element = event.target?.closest?.("[data-zju-teacher-url]");
+      if (!element || element.closest("#zju-helper-panel")) return;
+      if (!clickedScore(element, event)) return;
+      const url = element.dataset.zjuTeacherUrl;
+      if (!url) return;
+      const now = Date.now();
+      if (lastOpened.url === url && now - lastOpened.at < 800) return;
+      lastOpened = { url, at: now };
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.open(url, "_blank", "noopener,noreferrer");
+    };
+    document.addEventListener("pointerdown", openTeacher, true);
+    document.addEventListener("click", openTeacher, true);
+  }
+
+  function scheduleTeacherDecorate() {
+    clearTimeout(teacherDecorateTimer);
+    teacherDecorateTimer = setTimeout(() => {
+      decorateTeachers();
+    }, 0);
   }
 
   function loadTeacherRatings() {
@@ -348,16 +417,20 @@
     clearOldMainDecorations();
     const rows = decorateCourseRows();
     const colors = decorateClassTables();
-    const teachers = decorateTeachers();
     renderCampusOptions();
     renderCampusWarning();
     const diagnostics = document.getElementById("zju-helper-diagnostics");
-    if (diagnostics) diagnostics.textContent = `已选行 ${rows.selectedRows} · 推荐行 ${rows.recommendedRows} · 弹窗 ${colors} 行 · 教师评分 ${teachers}`;
+    if (diagnostics) diagnostics.textContent = `已选行 ${rows.selectedRows} · 推荐行 ${rows.recommendedRows} · 弹窗 ${colors} 行 · 教师评分 ${teacherRatings.length ? "已加载" : "加载中"}`;
+    scheduleTeacherDecorate();
+    if (!teacherLoadStarted) {
+      teacherLoadStarted = true;
+      setTimeout(loadTeacherRatings, 0);
+    }
   }
 
   function scheduleDecorate() {
     clearTimeout(decorateTimer);
-    decorateTimer = setTimeout(decorate, 120);
+    decorateTimer = setTimeout(decorate, 220);
   }
 
   window.addEventListener("zju-course-helper:data", event => {
@@ -383,12 +456,19 @@
     scheduleDecorate();
   });
 
-  loadTeacherRatings();
+  bindTeacherNavigation();
 
   new MutationObserver(mutations => {
+    const relevantNode = node => {
+      if (node.nodeType !== Node.ELEMENT_NODE) return false;
+      return node.matches("tr, td, tbody, table, .ant-modal, .ant-table-wrapper")
+        || Boolean(node.querySelector?.("tr, td, tbody, table, .ant-modal, .ant-table-wrapper"));
+    };
     const pageChanged = mutations.some(mutation => {
       const element = mutation.target.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target.parentElement;
-      return !element?.closest?.("#zju-helper-panel");
+      if (!element || element.closest?.("#zju-helper-panel")) return false;
+      if (element.closest?.("table, .ant-modal, .ant-table-wrapper")) return true;
+      return [...mutation.addedNodes, ...mutation.removedNodes].some(relevantNode);
     });
     if (pageChanged) scheduleDecorate();
   }).observe(document.documentElement, { childList: true, subtree: true });

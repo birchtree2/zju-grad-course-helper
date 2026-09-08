@@ -7,6 +7,7 @@
   const nativeSend = XHR.prototype.send;
   const nativeHeader = XHR.prototype.setRequestHeader;
   const REFRESH_INTERVAL_MS = 60 * 1000;
+  const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const headers = new Map();
   let apiPrefix = "", selected = [], courses = [], classes = [], refreshing = false, lastRefreshAt = 0;
 
@@ -95,8 +96,9 @@
 
   function normalize(raw, course) {
     const item = raw.pyKcbj || raw;
-    const schedule = item.sjddBz || "";
-    const campus = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山"].find(name => schedule.includes(name)) || "";
+    const schedule = item.sjddBz || item.sksjdd || item.sksjdds || item.sjdd || course.schedule || "";
+    const campusText = [schedule, item.xqmc, item.sxqmc, item.jxqmc, item.campus].filter(Boolean).join(" ");
+    const campus = CAMPUS_OPTIONS.find(name => campusText.includes(name)) || "";
     return {
       kckId: course.kckId, courseCode: course.courseCode || item.kcbh || "",
       courseName: item.kcmc || course.courseName || "", kcbjId: item.id || raw.kcbjId,
