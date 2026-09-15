@@ -7,7 +7,7 @@
   const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const CHALAOShi_URL = "https://chalaoshi.netlify.app/";
   const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0, homeCampuses: [] };
-  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLinkFrame = 0, switchButtonFrame = 0, teacherLoadStarted = false, teacherRatings = [];
+  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLinkFrame = 0, switchButtonFrame = 0, teacherLoadStarted = false, dataSeen = false, teacherRatings = [];
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -559,10 +559,12 @@
   window.addEventListener("zju-course-helper:data", event => {
     const data = event.detail || {};
     if (data.type === "context") {
+      dataSeen = true;
       state.selected = data.selected || [];
       state.currentCourse = data.currentCourse || null;
       scheduleDecorate();
     } else if (data.type === "capacities") {
+      dataSeen = true;
       state.classes = data.classes || [];
       state.selected = data.selected || state.selected;
       state.updatedAt = data.updatedAt || Date.now();
@@ -577,6 +579,12 @@
     if (saved[STORAGE_KEY]) Object.assign(state, saved[STORAGE_KEY]);
     makePanel();
     scheduleDecorate();
+    window.dispatchEvent(new CustomEvent("zju-course-helper:ready"));
+    setTimeout(() => {
+      if (!dataSeen && document.getElementById("zju-helper-status")?.textContent === "正在读取课程…") {
+        setStatus("未捕获选课数据，请刷新当前页面", "waiting");
+      }
+    }, 4000);
   });
 
   document.addEventListener("scroll", scheduleTeacherLinkHitboxes, { capture: true, passive: true });

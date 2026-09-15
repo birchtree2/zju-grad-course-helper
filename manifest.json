@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "浙大研究生选课助手",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "显示已选课程实时人数，并标记教学班时间冲突。",
   "permissions": ["storage"],
   "host_permissions": ["https://yjsy.zju.edu.cn/*", "https://chalaoshi.netlify.app/*"],

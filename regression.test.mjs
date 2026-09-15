@@ -32,6 +32,9 @@ assert.match(content, /otherCourseConflict \? "red" : sameCourseConflict \? "yel
 assert.match(bridge, /name\.startsWith\("未"\)\) return false;[\s\S]*return Boolean\(item\.kcbjId\)/, "unselected status overrides a stale class id");
 assert.match(bridge, /const REFRESH_INTERVAL_MS = 60 \* 1000/, "automatic refresh interval is one minute");
 assert.match(bridge, /item\.sksjdd \|\| item\.sksjdds \|\| item\.sjdd \|\| course\.schedule/, "class normalization falls back to all known schedule fields");
+assert.match(bridge, /zju-course-helper:ready/, "page bridge replays captured data after the content script handshake");
+assert.match(bridge, /const nativeFetch = window\.fetch\?\.bind\(window\)/, "page bridge captures course data loaded through fetch");
+assert.match(bridge, /isCourseQuery\(path\)/, "fetch interception is limited to course query endpoints");
 assert.match(bridge, /工程师学院/, "engineering campus is recognized in page data");
 assert.match(bridge, /lastRefreshAt && Date\.now\(\) < cooldownUntil/, "manual refreshes share a cooldown window");
 assert.match(content, /冷却中/, "refresh button shows a cooldown state");
@@ -63,6 +66,6 @@ assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background
 assert.match(content, /zju-helper-collapse/, "side panel has a collapse control");
 assert.match(css, /data-collapsed="true"/, "collapsed side panel stays as a bottom bar");
 assert.match(css, /#zju-helper-teacher-links/, "teacher score hitboxes live outside Vue-owned tables");
-assert.equal(manifest.version, "0.6.5");
+assert.equal(manifest.version, "0.6.6");
 
 console.log("regression checks passed");

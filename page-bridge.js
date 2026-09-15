@@ -10,8 +10,12 @@
   const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const headers = new Map();
   let apiPrefix = "", selected = [], courses = [], classes = [], refreshing = false, lastRefreshAt = 0;
+  let lastStatus = { type: "status", state: "waiting", message: "等待选课数据加载" };
 
-  const emit = detail => window.dispatchEvent(new CustomEvent(OUT, { detail }));
+  const emit = detail => {
+    if (detail?.type === "status") lastStatus = detail;
+    window.dispatchEvent(new CustomEvent(OUT, { detail }));
+  };
   const pathOf = url => { try { return new URL(url, location.href).pathname; } catch (_) { return String(url || ""); } };
   const jsonOf = xhr => { try { return xhr.response && typeof xhr.response === "object" ? xhr.response : JSON.parse(xhr.responseText); } catch (_) { return null; } };
 
@@ -77,6 +81,38 @@
     return nativeSend.call(this, body);
   };
 
+  const nativeFetch = window.fetch?.bind(window);
+  function requestHeaders(input, init) {
+    const result = new Map();
+    const source = init?.headers || input?.headers;
+    if (!source) return result;
+    if (typeof source.forEach === "function") source.forEach((value, name) => result.set(String(name), String(value)));
+    else if (Array.isArray(source)) source.forEach(([name, value]) => result.set(String(name), String(value)));
+    else Object.entries(source).forEach(([name, value]) => result.set(String(name), String(value)));
+    return result;
+  }
+
+  function isCourseQuery(path) {
+    return /\/py\/pyXsxk\/(?:query[^/]*Xsxk|queryXsKcxd)/i.test(path);
+  }
+
+  if (nativeFetch) {
+    window.fetch = function(input, init) {
+      const url = typeof input === "string" ? input : input?.url;
+      const path = pathOf(url);
+      if (path.includes("/py/")) {
+        rememberPrefix(url);
+        for (const [name, value] of requestHeaders(input, init)) if (!/^content-(type|length)$/i.test(name)) headers.set(name, value);
+      }
+      const request = nativeFetch(input, init);
+      if (!isCourseQuery(path)) return request;
+      return request.then(response => {
+        response.clone().json().then(data => { if (data?.success) captureCourses(data); }).catch(() => {});
+        return response;
+      });
+    };
+  }
+
   function apiGet(path, params) {
     return new Promise((resolve, reject) => {
       const xhr = new XHR(); xhr.__zjuOwn = true;
@@ -133,6 +169,11 @@
     emit({ type: "context", selected, courseCount: courses.length });
     if (classes.length) emit({ type: "capacities", classes, selected, updatedAt: Date.now() });
     refreshAll();
+  });
+  window.addEventListener("zju-course-helper:ready", () => {
+    emit({ type: "context", selected, courseCount: courses.length });
+    if (classes.length) emit({ type: "capacities", classes, selected, updatedAt: Date.now() });
+    emit(lastStatus);
   });
   setTimeout(() => emit({ type: "status", state: "waiting", message: "等待选课数据加载" }), 800);
   setTimeout(refreshAll, REFRESH_INTERVAL_MS);
