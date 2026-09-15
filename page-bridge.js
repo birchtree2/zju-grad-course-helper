@@ -139,6 +139,7 @@
       kckId: course.kckId, courseCode: course.courseCode || item.kcbh || "",
       courseName: item.kcmc || course.courseName || "", kcbjId: item.id || raw.kcbjId,
       classCode: item.bjbh || "", selected: item.xzrs, waiting: item.hxrs, capacity: item.bjrl,
+      teacher: item.zjjsXm || item.zjjsxm || item.jsxm || item.jsmc || item.zjjs || raw.zjjsXm || raw.zjjsxm || raw.jsxm || raw.jsmc || "",
       schedule, campus, statusCode: raw.xkztDm, status: raw.xkztMc || ""
     };
   }

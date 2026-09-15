@@ -66,6 +66,6 @@ assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background
 assert.match(content, /zju-helper-collapse/, "side panel has a collapse control");
 assert.match(css, /data-collapsed="true"/, "collapsed side panel stays as a bottom bar");
 assert.match(css, /#zju-helper-teacher-links/, "teacher score hitboxes live outside Vue-owned tables");
-assert.equal(manifest.version, "0.6.9");
+assert.equal(manifest.version, "0.6.10");
 
 console.log("regression checks passed");

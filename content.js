@@ -144,6 +144,7 @@
   }
 
   function decorateTeachers() {
+    decorateModalTeachers();
     document.querySelectorAll("[data-zju-teacher-info]").forEach(element => {
       element.removeAttribute("data-zju-teacher-info");
       element.removeAttribute("data-zju-teacher-tier");
@@ -173,16 +174,38 @@
       return 1;
     };
     for (const anchor of document.querySelectorAll("a")) {
-      if (anchor.closest("#zju-helper-panel")) continue;
+      if (anchor.closest("#zju-helper-panel, #zju-helper-switch-modal")) continue;
       const teachers = teachersByName.get(text(anchor));
       if (teachers?.length) decorated += annotate(anchor, teachers);
     }
     for (const cell of document.querySelectorAll("td")) {
-      if (cell.closest("#zju-helper-panel") || cell.querySelector("[data-zju-teacher-info]")) continue;
+      if (cell.closest("#zju-helper-panel, #zju-helper-switch-modal") || cell.querySelector("[data-zju-teacher-info]")) continue;
       const teachers = [...new Map(text(cell).split(/[\s/、,，;；]+/).flatMap(name => teachersByName.get(name) || []).map(item => [item.id, item])).values()];
       if (teachers.length && text(cell).length < 100) decorated += annotate(cell, teachers);
     }
     return decorated;
+  }
+
+  function decorateModalTeachers() {
+    for (const cell of document.querySelectorAll('#zju-helper-switch-modal [data-teacher-name]')) {
+      cell.querySelectorAll('.zju-helper-modal-rating').forEach(link => link.remove());
+      const names = cell.dataset.teacherName.split(/[\s/、,，;；]+/);
+      for (const teacher of teacherRatings.filter(item => names.includes(item.name))) {
+        const link = document.createElement('a');
+        const url = new URL(CHALAOShi_URL);
+        if (teacher.id) url.searchParams.set('teacherId', teacher.id);
+        url.searchParams.set('teacherName', teacher.name);
+        if (teacher.college) url.searchParams.set('college', teacher.college);
+        link.href = url.toString();
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.className = 'zju-helper-modal-rating';
+        link.dataset.tier = teacherScoreClass(teacher.score);
+        link.textContent = teacher.score || '暂无评分';
+        link.title = `${teacher.name}（${teacher.scoreCount || 0}人评价）`;
+        cell.append(link);
+      }
+    }
   }
 
   function teacherScoreRect(element) {
@@ -287,7 +310,7 @@
           <button class="zju-helper-switch-close" type="button" aria-label="关闭">×</button>
         </div>
         <div class="zju-helper-switch-legend"><span class="blue">已选班级</span><span class="green">不冲突</span><span class="yellow">同课冲突</span><span class="red">其他课程冲突</span></div>
-        <div class="zju-helper-switch-table-wrap"><table class="zju-helper-switch-table"><thead><tr><th>班级编号</th><th>已选/待筛选/容量</th><th>筛选比</th><th>上课时间地点</th><th>状态</th></tr></thead><tbody></tbody></table></div>
+        <div class="zju-helper-switch-table-wrap"><table class="zju-helper-switch-table"><thead><tr><th>班级编号</th><th>主讲教师</th><th>已选/待筛选/容量</th><th>上课时间地点</th><th>状态</th></tr></thead><tbody></tbody></table></div>
       </div>`;
     const dialog = modal.querySelector(".zju-helper-switch-dialog");
     modal.addEventListener("click", event => { if (event.target === modal) closeClassSwitchModal(); });
@@ -301,17 +324,22 @@
         const status = classConflictState(item, selectedIds);
         const row = document.createElement("tr");
         row.dataset.zjuState = status;
-        const values = [item.classCode || "教学班未知", enrollmentLabel(item), ratio(item).label, item.schedule || "-", classConflictLabel(item, status)];
+        const values = [item.classCode || "教学班未知", typeof item.teacher === 'string' && item.teacher ? item.teacher : "教师信息未返回", enrollmentLabel(item), item.schedule || "-", classConflictLabel(item, status)];
         values.forEach((value, index) => {
           const cell = document.createElement("td");
           cell.textContent = value;
-          if (index === 1 || index === 2) cell.dataset.zjuRatioTier = ratioTier(item);
+          if (index === 1) cell.dataset.teacherName = typeof item.teacher === 'string' ? item.teacher : '';
+          if (index === 2) {
+            cell.dataset.zjuRatioTier = ratioTier(item);
+            cell.dataset.zjuRatioLabel = ratio(item).label;
+          }
           row.appendChild(cell);
         });
         body.appendChild(row);
       }
     }
     document.documentElement.appendChild(modal);
+    scheduleTeacherDecorate();
     modal.querySelector('.zju-helper-switch-table-wrap').scrollTop = oldScroll;
     if (!refresh) dialog.querySelector(".zju-helper-switch-close")?.focus();
   }
@@ -407,6 +435,7 @@
 
   function clearOldMainDecorations() {
     document.querySelectorAll("td[data-zju-count], td[data-zju-options], td[data-zju-row-info], td[data-zju-ratio-label]").forEach(cell => {
+      if (cell.closest('#zju-helper-switch-modal')) return;
       cell.removeAttribute("data-zju-count");
       cell.removeAttribute("data-zju-count-title");
       cell.removeAttribute("data-zju-options");
