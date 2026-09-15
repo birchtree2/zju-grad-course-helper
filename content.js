@@ -7,7 +7,7 @@
   const CAMPUS_OPTIONS = ["紫金港", "玉泉", "西溪", "华家池", "之江", "海宁", "舟山", "工程师学院"];
   const CHALAOShi_URL = "https://chalaoshi.netlify.app/";
   const state = { classes: [], selected: [], currentCourse: null, updatedAt: 0, homeCampuses: [] };
-  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLinkFrame = 0, teacherLoadStarted = false, teacherRatings = [];
+  let decorateTimer = 0, refreshButtonTimer = 0, teacherDecorateTimer = 0, teacherLinkFrame = 0, switchButtonFrame = 0, teacherLoadStarted = false, teacherRatings = [];
 
   function text(value) {
     const raw = value && typeof value === "object" && "textContent" in value
@@ -238,6 +238,111 @@
     }, 0);
   }
 
+  function selectedClassIds() {
+    return new Set(state.selected.flatMap(item => [item.classCode, item.kcbjId]).filter(Boolean).map(String));
+  }
+
+  function classConflictState(item, selectedIds) {
+    const isSelected = selectedIds.has(String(item.classCode)) || selectedIds.has(String(item.kcbjId));
+    if (isSelected) return "blue";
+    const otherCourseConflict = state.selected.some(selected =>
+      text(selected.courseName) !== text(item.courseName) && conflicts(item.schedule, selected.schedule)
+    );
+    if (otherCourseConflict) return "red";
+    const sameCourseConflict = state.selected.some(selected =>
+      text(selected.courseName) === text(item.courseName) && conflicts(item.schedule, selected.schedule)
+    );
+    return sameCourseConflict ? "yellow" : "green";
+  }
+
+  function classConflictLabel(item, status) {
+    if (status === "blue") return "已选班级";
+    if (status === "red") return "与其他已选课冲突";
+    if (status === "yellow") return "与同课已选班冲突";
+    return parseSchedules(item.schedule).length ? "不冲突" : "时间未识别";
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[character]));
+  }
+
+  function closeClassSwitchModal() {
+    document.getElementById("zju-helper-switch-modal")?.remove();
+  }
+
+  function openClassSwitchModal(courseCode) {
+    closeClassSwitchModal();
+    const items = state.classes.filter(item => String(item.courseCode) === String(courseCode));
+    const modal = document.createElement("div");
+    modal.id = "zju-helper-switch-modal";
+    modal.setAttribute("role", "dialog");
+    modal.setAttribute("aria-modal", "true");
+    const courseName = items[0]?.courseName || courseCode || "课程";
+    modal.innerHTML = `
+      <div class="zju-helper-switch-dialog">
+        <div class="zju-helper-switch-header">
+          <div><div class="zju-helper-switch-title">${escapeHtml(courseName)} · 教学班情况</div><div class="zju-helper-switch-note">仅查看，不会提交选退课；换班请按学校系统流程操作。</div></div>
+          <button class="zju-helper-switch-close" type="button" aria-label="关闭">×</button>
+        </div>
+        <div class="zju-helper-switch-legend"><span class="blue">已选班级</span><span class="green">不冲突</span><span class="yellow">同课冲突</span><span class="red">其他课程冲突</span></div>
+        <div class="zju-helper-switch-table-wrap"><table class="zju-helper-switch-table"><thead><tr><th>班级编号</th><th>已选/待筛选/容量</th><th>筛选比</th><th>上课时间地点</th><th>状态</th></tr></thead><tbody></tbody></table></div>
+      </div>`;
+    const dialog = modal.querySelector(".zju-helper-switch-dialog");
+    modal.addEventListener("click", event => { if (event.target === modal) closeClassSwitchModal(); });
+    modal.querySelector(".zju-helper-switch-close").addEventListener("click", closeClassSwitchModal);
+    const body = modal.querySelector("tbody");
+    const selectedIds = selectedClassIds();
+    if (!items.length) {
+      body.innerHTML = `<tr><td colspan="5" class="zju-helper-switch-empty">暂无该课程的教学班数据，请先刷新实时人数。</td></tr>`;
+    } else {
+      for (const item of items) {
+        const status = classConflictState(item, selectedIds);
+        const row = document.createElement("tr");
+        row.dataset.zjuState = status;
+        const values = [item.classCode || "教学班未知", enrollmentLabel(item), ratio(item).label, item.schedule || "-", classConflictLabel(item, status)];
+        values.forEach((value, index) => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          if (index === 1 || index === 2) cell.dataset.zjuRatioTier = ratioTier(item);
+          row.appendChild(cell);
+        });
+        body.appendChild(row);
+      }
+    }
+    document.documentElement.appendChild(modal);
+    dialog.querySelector(".zju-helper-switch-close")?.focus();
+  }
+
+  function renderCourseSwitchButtons() {
+    let layer = document.getElementById("zju-helper-switch-links");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "zju-helper-switch-links";
+      document.documentElement.appendChild(layer);
+    }
+    const fragment = document.createDocumentFragment();
+    for (const cell of document.querySelectorAll("td[data-zju-switch-course]")) {
+      if (!cell.isConnected) continue;
+      const rect = cell.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom < 0 || rect.top > innerHeight) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "zju-helper-switch-button";
+      button.textContent = "查看其他班";
+      button.setAttribute("aria-label", `查看${cell.dataset.zjuSwitchCourse}的其他教学班`);
+      button.style.left = `${Math.max(4, rect.left + 6)}px`;
+      button.style.top = `${Math.max(4, rect.bottom - 28)}px`;
+      button.addEventListener("click", () => openClassSwitchModal(cell.dataset.zjuSwitchCourse));
+      fragment.appendChild(button);
+    }
+    layer.replaceChildren(fragment);
+  }
+
+  function scheduleCourseSwitchButtons() {
+    cancelAnimationFrame(switchButtonFrame);
+    switchButtonFrame = requestAnimationFrame(renderCourseSwitchButtons);
+  }
+
   function loadTeacherRatings() {
     if (typeof chrome === "undefined" || !chrome.storage?.local) return;
     chrome.storage.local.get(TEACHER_CACHE_KEY, saved => {
@@ -300,6 +405,7 @@
       cell.removeAttribute("data-zju-options");
       cell.removeAttribute("data-zju-row-info");
       cell.removeAttribute("data-zju-row-kind");
+      cell.removeAttribute("data-zju-switch-course");
       cell.removeAttribute("data-zju-ratio-label");
       cell.removeAttribute("data-zju-ratio-tier");
     });
@@ -340,7 +446,7 @@
   }
 
   function decorateCourseRows() {
-    const selectedIds = new Set(state.selected.flatMap(item => [item.classCode, item.kcbjId]).filter(Boolean).map(String));
+    const selectedIds = selectedClassIds();
     const selectedCourseIds = new Set(state.selected.map(item => String(item.kckId)));
     const groups = new Map();
     for (const item of state.classes) {
@@ -361,6 +467,7 @@
         codeCell.dataset.zjuRowInfo = chosen.map(item => selectedRowLabel(item, chosen.length > 1)).join("\n");
         codeCell.dataset.zjuRowKind = "selected";
         codeCell.dataset.zjuRatioTier = ratioTier(chosen.reduce((worst, item) => ratio(item).value > ratio(worst).value ? item : worst));
+        if (items.length > chosen.length) codeCell.dataset.zjuSwitchCourse = key;
         selectedRows += 1;
         continue;
       }
@@ -432,6 +539,7 @@
     clearOldMainDecorations();
     const rows = decorateCourseRows();
     const colors = decorateClassTables();
+    scheduleCourseSwitchButtons();
     renderCampusOptions();
     renderCampusWarning();
     const diagnostics = document.getElementById("zju-helper-diagnostics");
@@ -472,7 +580,12 @@
   });
 
   document.addEventListener("scroll", scheduleTeacherLinkHitboxes, { capture: true, passive: true });
+  document.addEventListener("scroll", scheduleCourseSwitchButtons, { capture: true, passive: true });
   window.addEventListener("resize", scheduleTeacherLinkHitboxes, { passive: true });
+  window.addEventListener("resize", scheduleCourseSwitchButtons, { passive: true });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeClassSwitchModal();
+  });
 
   new MutationObserver(mutations => {
     const relevantNode = node => {
@@ -482,7 +595,7 @@
     };
     const pageChanged = mutations.some(mutation => {
       const element = mutation.target.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target.parentElement;
-      if (!element || element.closest?.("#zju-helper-panel, #zju-helper-teacher-links")) return false;
+      if (!element || element.closest?.("#zju-helper-panel, #zju-helper-teacher-links, #zju-helper-switch-links, #zju-helper-switch-modal")) return false;
       if (element.closest?.("table, .ant-modal, .ant-table-wrapper")) return true;
       return [...mutation.addedNodes, ...mutation.removedNodes].some(relevantNode);
     });

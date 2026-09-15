@@ -18,6 +18,12 @@ assert.match(content, /selectedRowLabel\(item, chosen\.length > 1\)/, "only mult
 assert.match(content, /const classPart = showClassCode \?/, "a single selected wish has no prefix or class code");
 assert.doesNotMatch(content, /筛选比 \$\{ratio\(item\)\.label\}/, "displayed ratios omit the redundant label");
 assert.match(content, /join\("\\n"\)/, "multiple selected wishes render on separate lines");
+assert.match(content, /data-zju-switch-course/, "selected courses with alternatives expose a switch-class action");
+assert.match(content, /openClassSwitchModal\(courseCode\)/, "switch-class action opens an extension-owned comparison modal");
+assert.match(content, /仅查看，不会提交选退课/, "switch-class modal makes clear it does not submit enrollment actions");
+assert.match(content, /classConflictState\(item, selectedIds\)/, "switch-class modal calculates conflicts against current selections");
+assert.match(content, /zju-helper-switch-links/, "switch-class buttons live outside Vue-owned table cells");
+assert.match(css, /#zju-helper-switch-modal/, "switch-class comparison modal has dedicated styling");
 assert.match(content, /dataset\.zjuRatioLabel/, "modal enrollment cells receive a screening-ratio badge");
 assert.match(css, /td\[data-zju-row-info\]::after/, "inline information is rendered without changing Vue-owned children");
 assert.match(css, /td\[data-zju-ratio-label\]::after/, "modal ratio badge is rendered without changing Vue-owned children");
@@ -57,6 +63,6 @@ assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background
 assert.match(content, /zju-helper-collapse/, "side panel has a collapse control");
 assert.match(css, /data-collapsed="true"/, "collapsed side panel stays as a bottom bar");
 assert.match(css, /#zju-helper-teacher-links/, "teacher score hitboxes live outside Vue-owned tables");
-assert.equal(manifest.version, "0.6.4");
+assert.equal(manifest.version, "0.6.5");
 
 console.log("regression checks passed");
