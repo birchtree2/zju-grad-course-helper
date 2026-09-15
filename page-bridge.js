@@ -155,13 +155,30 @@
     refreshing = true;
     lastRefreshAt = Date.now();
     emit({ type: "status", state: "loading", message: `正在刷新 ${courses.length} 门课程` });
-    const result = []; let failed = 0;
-    for (const course of courses) {
-      try { result.push(...(await apiGet("/py/pyKcbj/selectXsKxbjByKckId", { kckId: course.kckId })).map(x => normalize(x, course))); }
+    const selectedCourseIds = new Set(selected.map(item => String(item.kckId)).filter(Boolean));
+    const priorityCourses = courses.filter(course => selectedCourseIds.has(String(course.kckId)));
+    const backgroundCourses = courses.filter(course => !selectedCourseIds.has(String(course.kckId)));
+    const classKey = item => `${item.kckId}:${item.classCode || item.kcbjId || item.schedule}`;
+    const merge = batch => {
+      const byKey = new Map(classes.map(item => [classKey(item), item]));
+      for (const item of batch) byKey.set(classKey(item), item);
+      classes = [...byKey.values()];
+      emit({ type: "capacities", classes, selected, updatedAt: Date.now() });
+    };
+    const fetchCourse = async course => (await apiGet("/py/pyKcbj/selectXsKxbjByKckId", { kckId: course.kckId })).map(x => normalize(x, course));
+    let failed = 0;
+    const priorityResults = await Promise.allSettled(priorityCourses.map(fetchCourse));
+    const priorityBatch = [];
+    priorityResults.forEach(result => result.status === "fulfilled" ? priorityBatch.push(...result.value) : failed += 1);
+    merge(priorityBatch);
+    if (priorityCourses.length) {
+      emit({ type: "status", state: "loading", message: `已更新已选课程，后台查询其余 ${backgroundCourses.length} 门课程`, cooldownUntil: lastRefreshAt + REFRESH_INTERVAL_MS });
+    }
+    for (const course of backgroundCourses) {
+      try { merge(await fetchCourse(course)); }
       catch (_) { failed += 1; }
     }
-    classes = result; refreshing = false;
-    emit({ type: "capacities", classes, selected, updatedAt: Date.now(), failed });
+    refreshing = false;
     emit({ type: "status", state: failed ? "warning" : "ready", message: failed ? `已刷新，${failed} 门课程暂未返回` : `已更新 ${classes.length} 个教学班`, cooldownUntil: lastRefreshAt + REFRESH_INTERVAL_MS });
   }
 
@@ -174,6 +191,11 @@
     emit({ type: "context", selected, courseCount: courses.length });
     if (classes.length) emit({ type: "capacities", classes, selected, updatedAt: Date.now() });
     emit(lastStatus);
+  });
+  window.addEventListener("zju-course-helper:selected-context", event => {
+    if (!Array.isArray(event.detail?.selected)) return;
+    selected = event.detail.selected;
+    emit({ type: "context", selected, courseCount: courses.length });
   });
   setTimeout(() => emit({ type: "status", state: "waiting", message: "等待选课数据加载" }), 800);
   setTimeout(refreshAll, REFRESH_INTERVAL_MS);

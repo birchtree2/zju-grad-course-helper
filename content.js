@@ -415,6 +415,44 @@
     });
   }
 
+  function inferSelectedFromPage() {
+    if (!state.classes.length) return [];
+    const groups = new Map();
+    for (const item of state.classes) {
+      const key = String(item.courseCode || "");
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    const inferred = [];
+    for (const row of document.querySelectorAll("tr")) {
+      if (row.closest(".ant-modal")) continue;
+      const rowText = text(row);
+      if (!/(退课|正在修读|成绩继承)/.test(rowText)) continue;
+      const cells = [...row.querySelectorAll(":scope > td")];
+      for (const [courseCode, items] of groups) {
+        if (!cells.some(cell => text(cell) === courseCode)) continue;
+        const matches = items.filter(item => item.classCode && rowText.includes(String(item.classCode)));
+        for (const item of matches) inferred.push({ ...item, status: item.status || "页面已选" });
+      }
+    }
+    return inferred;
+  }
+
+  function reconcileSelectedFromPage() {
+    const inferred = inferSelectedFromPage();
+    if (!inferred.length) return;
+    const previous = new Set(state.selected.map(item => String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`)));
+    const byId = new Map();
+    for (const item of [...state.selected, ...inferred]) {
+      const key = String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`);
+      byId.set(key, item);
+    }
+    state.selected = [...byId.values()];
+    const changed = state.selected.some(item => !previous.has(String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`)));
+    if (changed) window.dispatchEvent(new CustomEvent("zju-course-helper:selected-context", { detail: { selected: state.selected } }));
+  }
+
   function ratio(item) {
     const chosen = Number(item.selected) || 0;
     const waiting = Number(item.waiting) || 0;
@@ -536,6 +574,7 @@
   }
 
   function decorate() {
+    reconcileSelectedFromPage();
     clearOldMainDecorations();
     const rows = decorateCourseRows();
     const colors = decorateClassTables();

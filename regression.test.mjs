@@ -35,6 +35,12 @@ assert.match(bridge, /item\.sksjdd \|\| item\.sksjdds \|\| item\.sjdd \|\| cours
 assert.match(bridge, /zju-course-helper:ready/, "page bridge replays captured data after the content script handshake");
 assert.match(bridge, /const nativeFetch = window\.fetch\?\.bind\(window\)/, "page bridge captures course data loaded through fetch");
 assert.match(bridge, /isCourseQuery\(path\)/, "fetch interception is limited to course query endpoints");
+assert.match(bridge, /Promise\.allSettled\(priorityCourses\.map\(fetchCourse\)\)/, "selected courses refresh before background classes");
+assert.match(bridge, /后台查询其余/, "background class refresh is reported separately");
+assert.match(bridge, /zju-course-helper:selected-context/, "page bridge accepts selected classes inferred from the rendered page");
+assert.match(content, /inferSelectedFromPage\(\)/, "visible selected rows supplement missing selection context");
+assert.match(content, /退课\|正在修读\|成绩继承/, "selection fallback recognizes visible enrollment states");
+assert.match(content, /rowText\.includes\(String\(item\.classCode\)\)/, "selection fallback resolves the selected teaching class by class code");
 assert.match(bridge, /工程师学院/, "engineering campus is recognized in page data");
 assert.match(bridge, /lastRefreshAt && Date\.now\(\) < cooldownUntil/, "manual refreshes share a cooldown window");
 assert.match(content, /冷却中/, "refresh button shows a cooldown state");
@@ -66,6 +72,6 @@ assert.doesNotMatch(css, /--zju-ratio-bg/, "ratio colors do not add a background
 assert.match(content, /zju-helper-collapse/, "side panel has a collapse control");
 assert.match(css, /data-collapsed="true"/, "collapsed side panel stays as a bottom bar");
 assert.match(css, /#zju-helper-teacher-links/, "teacher score hitboxes live outside Vue-owned tables");
-assert.equal(manifest.version, "0.6.6");
+assert.equal(manifest.version, "0.6.8");
 
 console.log("regression checks passed");
