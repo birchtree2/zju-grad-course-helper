@@ -270,11 +270,13 @@
     document.getElementById("zju-helper-switch-modal")?.remove();
   }
 
-  function openClassSwitchModal(courseCode) {
+  function openClassSwitchModal(courseCode, refresh = false) {
+    const oldScroll = document.querySelector('#zju-helper-switch-modal .zju-helper-switch-table-wrap')?.scrollTop || 0;
     closeClassSwitchModal();
     const items = state.classes.filter(item => String(item.courseCode) === String(courseCode));
     const modal = document.createElement("div");
     modal.id = "zju-helper-switch-modal";
+    modal.dataset.courseCode = courseCode;
     modal.setAttribute("role", "dialog");
     modal.setAttribute("aria-modal", "true");
     const courseName = items[0]?.courseName || courseCode || "课程";
@@ -310,7 +312,8 @@
       }
     }
     document.documentElement.appendChild(modal);
-    dialog.querySelector(".zju-helper-switch-close")?.focus();
+    modal.querySelector('.zju-helper-switch-table-wrap').scrollTop = oldScroll;
+    if (!refresh) dialog.querySelector(".zju-helper-switch-close")?.focus();
   }
 
   function renderCourseSwitchButtons() {
@@ -321,6 +324,10 @@
       document.documentElement.appendChild(layer);
     }
     const fragment = document.createDocumentFragment();
+    if (document.getElementById('zju-helper-switch-modal') || document.querySelector('.ant-modal')) {
+      layer.replaceChildren(fragment);
+      return;
+    }
     for (const cell of document.querySelectorAll("td[data-zju-switch-course]")) {
       if (!cell.isConnected) continue;
       const rect = cell.getBoundingClientRect();
@@ -415,43 +422,6 @@
     });
   }
 
-  function inferSelectedFromPage() {
-    if (!state.classes.length) return [];
-    const groups = new Map();
-    for (const item of state.classes) {
-      const key = String(item.courseCode || "");
-      if (!key) continue;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(item);
-    }
-    const inferred = [];
-    for (const row of document.querySelectorAll("tr")) {
-      if (row.closest(".ant-modal")) continue;
-      const rowText = text(row);
-      if (!/(退课|正在修读|成绩继承)/.test(rowText)) continue;
-      const cells = [...row.querySelectorAll(":scope > td")];
-      for (const [courseCode, items] of groups) {
-        if (!cells.some(cell => text(cell) === courseCode)) continue;
-        const matches = items.filter(item => item.classCode && rowText.includes(String(item.classCode)));
-        for (const item of matches) inferred.push({ ...item, status: item.status || "页面已选" });
-      }
-    }
-    return inferred;
-  }
-
-  function reconcileSelectedFromPage() {
-    const inferred = inferSelectedFromPage();
-    if (!inferred.length) return;
-    const previous = new Set(state.selected.map(item => String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`)));
-    const byId = new Map();
-    for (const item of [...state.selected, ...inferred]) {
-      const key = String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`);
-      byId.set(key, item);
-    }
-    state.selected = [...byId.values()];
-    const changed = state.selected.some(item => !previous.has(String(item.kcbjId || item.classCode || `${item.kckId}:${item.schedule}`)));
-    if (changed) window.dispatchEvent(new CustomEvent("zju-course-helper:selected-context", { detail: { selected: state.selected } }));
-  }
 
   function ratio(item) {
     const chosen = Number(item.selected) || 0;
@@ -495,7 +465,7 @@
     }
     let selectedRows = 0, recommendedRows = 0;
     for (const row of document.querySelectorAll("tr")) {
-      if (row.closest(".ant-modal")) continue;
+      if (row.closest(".ant-modal, #zju-helper-switch-modal")) continue;
       const cells = [...row.querySelectorAll(":scope > td")];
       const codeCell = cells.find(cell => groups.has(text(cell)));
       if (!codeCell) continue;
@@ -505,7 +475,7 @@
         codeCell.dataset.zjuRowInfo = chosen.map(item => selectedRowLabel(item, chosen.length > 1)).join("\n");
         codeCell.dataset.zjuRowKind = "selected";
         codeCell.dataset.zjuRatioTier = ratioTier(chosen.reduce((worst, item) => ratio(item).value > ratio(worst).value ? item : worst));
-        if (items.length > chosen.length) codeCell.dataset.zjuSwitchCourse = key;
+        if (items.length > chosen.length) codeCell.dataset.zjuSwitchCourse = text(codeCell);
         selectedRows += 1;
         continue;
       }
@@ -574,7 +544,6 @@
   }
 
   function decorate() {
-    reconcileSelectedFromPage();
     clearOldMainDecorations();
     const rows = decorateCourseRows();
     const colors = decorateClassTables();
@@ -591,8 +560,8 @@
   }
 
   function scheduleDecorate() {
-    clearTimeout(decorateTimer);
-    decorateTimer = setTimeout(decorate, 220);
+    if (decorateTimer) return;
+    decorateTimer = setTimeout(() => { decorateTimer = 0; decorate(); }, 220);
   }
 
   window.addEventListener("zju-course-helper:data", event => {
@@ -611,6 +580,10 @@
       scheduleDecorate();
     } else if (data.type === "status") {
       setStatus(data.message || "", data.state || "", Number(data.cooldownUntil) || 0);
+    }
+    if (data.type === 'context' || data.type === 'capacities') {
+      const modal = document.getElementById('zju-helper-switch-modal');
+      if (modal) openClassSwitchModal(modal.dataset.courseCode, true);
     }
   });
 
@@ -637,6 +610,7 @@
   new MutationObserver(mutations => {
     const relevantNode = node => {
       if (node.nodeType !== Node.ELEMENT_NODE) return false;
+      if (node.id?.startsWith('zju-helper-')) return false;
       return node.matches("tr, td, tbody, table, .ant-modal, .ant-table-wrapper")
         || Boolean(node.querySelector?.("tr, td, tbody, table, .ant-modal, .ant-table-wrapper"));
     };

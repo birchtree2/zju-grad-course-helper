@@ -1,0 +1,63 @@
+import { JSDOM, VirtualConsole } from 'jsdom';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const source = fs.readFileSync(new URL('../content.js', import.meta.url), 'utf8');
+const errors = [];
+const vc = new VirtualConsole();
+vc.on('jsdomError', e => errors.push(e.message));
+const dom = new JSDOM('<table><tbody><tr><td>课程A</td><td id="code">123</td><td id="schedule">班级编号123001 秋(每周)//星期一//1-2节</td><td id="status">正在修读 退课</td></tr></tbody></table>', {runScripts:'outside-only', pretendToBeVisual:true, url:'https://yjsy.zju.edu.cn/', virtualConsole:vc});
+const w = dom.window;
+w.chrome = { storage:{local:{get(k,cb){cb({});},set(){}}}, runtime:{sendMessage(m,cb){cb({ok:true,teachers:[]});}} };
+w.eval(source);
+const classes = [1,2].map(n => ({courseCode:'123',courseName:'课程A',kckId:'a',kcbjId:'a'+n,classCode:'12300'+n,selected:10,waiting:20,capacity:30,schedule:'秋(每周)//星期一//1-2节'}));
+const send = selected => w.dispatchEvent(new w.CustomEvent('zju-course-helper:data',{detail:{type:'capacities',classes,selected,updatedAt:Date.now()}}));
+const settle = () => new Promise(r=>setTimeout(r,350));
+w.HTMLElement.prototype.getBoundingClientRect = () => ({left:10,top:20,bottom:150,right:300,width:290,height:130});
+send([classes[0]]);
+await settle();
+assert.deepEqual(errors, [], 'rendering selected course with alternatives must not throw');
+assert.match(w.document.querySelector('#code').dataset.zjuRowInfo, /10\/20\/30/);
+assert.equal(w.document.querySelector('#code').dataset.zjuSwitchCourse,'123');
+assert.match(w.document.querySelector('#zju-helper-diagnostics').textContent,/已选行 1/);
+w.document.querySelector('.zju-helper-switch-button').click();
+assert.equal(w.document.querySelectorAll('#zju-helper-switch-modal tbody tr').length,2);
+assert.equal(w.document.querySelectorAll('#zju-helper-switch-modal tr[data-zju-state="blue"]').length,1);
+classes[1].waiting=77;
+send([classes[0]]);
+await settle();
+assert.match(w.document.querySelector('#zju-helper-switch-modal').textContent,/10\/77\/30/);
+w.document.querySelector('.zju-helper-switch-close').click();
+for (const status of ['已选','正在修读','待筛选','待处理']) {
+  w.document.querySelector('#status').textContent=status;
+  send([classes[0]]);
+  await settle();
+  assert.match(w.document.querySelector('#code').dataset.zjuRowInfo,/10\/20\/30/,status);
+}
+send(classes);
+await settle();
+assert.match(w.document.querySelector('#code').dataset.zjuRowInfo,/123001.*\n123002/);
+w.document.querySelector('#status').textContent='未选';
+w.document.querySelector('#schedule').textContent='-';
+send([]);
+await settle();
+assert.equal(w.document.querySelector('#code').dataset.zjuSwitchCourse,undefined);
+assert.notEqual(w.document.querySelector('#code').dataset.zjuRowKind,'selected');
+assert.deepEqual(errors,[]);
+dom.window.close();
+console.log('runtime rendering checks passed');
+
+// Execute bridge selection handling through its real XHR listener.
+const bridgeDom = new JSDOM('',{runScripts:'outside-only',url:'https://yjsy.zju.edu.cn/'});
+const bw=bridgeDom.window;
+class XHR extends bw.EventTarget {open(){} send(){} setRequestHeader(){}}
+bw.XMLHttpRequest=XHR;
+let context;
+bw.addEventListener('zju-course-helper:data',e=>{if(e.detail.type==='context') context=e.detail;});
+bw.eval(fs.readFileSync(new URL('../page-bridge.js',import.meta.url),'utf8'));
+const query=rows=>{const x=new bw.XMLHttpRequest();x.open('GET','/py/pyXsxk/queryXsxkByXnxqXs');x.send();x.response={success:true,result:rows};x.dispatchEvent(new bw.Event('load'));};
+query(['已选','正在修读','待筛选','待处理','未选'].map((status,i)=>({kckId:'course',kcbjId:'id'+i,xkztMc:status})));
+assert.equal(context.selected.length,4);
+query([{kckId:'course',kcbjId:'id0',xkztMc:'未选'}]);
+assert.equal(context.selected.length,0,'dropping a class clears selected context');
+bridgeDom.window.close();
+console.log('bridge selection checks passed');

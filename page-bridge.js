@@ -167,10 +167,10 @@
     };
     const fetchCourse = async course => (await apiGet("/py/pyKcbj/selectXsKxbjByKckId", { kckId: course.kckId })).map(x => normalize(x, course));
     let failed = 0;
-    const priorityResults = await Promise.allSettled(priorityCourses.map(fetchCourse));
-    const priorityBatch = [];
-    priorityResults.forEach(result => result.status === "fulfilled" ? priorityBatch.push(...result.value) : failed += 1);
-    merge(priorityBatch);
+    await Promise.allSettled(priorityCourses.map(async course => {
+      try { merge(await fetchCourse(course)); }
+      catch (_) { failed += 1; }
+    }));
     if (priorityCourses.length) {
       emit({ type: "status", state: "loading", message: `已更新已选课程，后台查询其余 ${backgroundCourses.length} 门课程`, cooldownUntil: lastRefreshAt + REFRESH_INTERVAL_MS });
     }
@@ -191,11 +191,6 @@
     emit({ type: "context", selected, courseCount: courses.length });
     if (classes.length) emit({ type: "capacities", classes, selected, updatedAt: Date.now() });
     emit(lastStatus);
-  });
-  window.addEventListener("zju-course-helper:selected-context", event => {
-    if (!Array.isArray(event.detail?.selected)) return;
-    selected = event.detail.selected;
-    emit({ type: "context", selected, courseCount: courses.length });
   });
   setTimeout(() => emit({ type: "status", state: "waiting", message: "等待选课数据加载" }), 800);
   setTimeout(refreshAll, REFRESH_INTERVAL_MS);
